@@ -1,4 +1,4 @@
-# Repo Tree
+# TreePad
 
 > A high-performance GitHub file tree browser with AI chat, built as a Chrome extension.
 
