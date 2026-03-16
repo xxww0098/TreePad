@@ -1,0 +1,1499 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* ═══════════════════════════════════════════════
+   Panel — 毛玻璃 + 顶部渐变装饰线
+   ═══════════════════════════════════════════════ */
+
+.treepad-panel {
+  position: fixed;
+  top: 0;
+  height: 100vh;
+  background: var(--rt-bg);
+  backdrop-filter: blur(var(--rt-blur)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--rt-blur)) saturate(180%);
+  box-shadow: var(--rt-panel-shadow);
+  display: flex;
+  flex-direction: column;
+  font-family: var(--rt-font);
+  font-size: var(--rt-font-size);
+  color: var(--rt-text);
+  z-index: 99999;
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+              opacity 0.3s ease;
+  border: 1px solid var(--rt-panel-border);
+}
+
+/* 顶部彩色装饰线 */
+.treepad-panel::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #6366f1 0%, #a78bfa 40%, #f472b6 70%, #fb923c 100%);
+  opacity: 0.7;
+  z-index: 2;
+}
+
+.treepad-panel.left {
+  left: 0;
+  border-left: none;
+  border-radius: 0 var(--rt-radius) var(--rt-radius) 0;
+}
+
+.treepad-panel.right {
+  right: 0;
+  border-right: none;
+  border-radius: var(--rt-radius) 0 0 var(--rt-radius);
+}
+
+.treepad-panel.hidden {
+  transform: translateX(-100%);
+  opacity: 0;
+}
+
+.treepad-panel.right.hidden {
+  transform: translateX(100%);
+}
+
+/* ═══════════════════════════════════════════════
+   Header
+   ═══════════════════════════════════════════════ */
+
+.tree-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px 10px;
+  background: var(--rt-header-bg);
+  border-bottom: 1px solid var(--rt-header-border);
+  flex-shrink: 0;
+  min-height: 44px;
+}
+
+.tree-header-title {
+  font-weight: 650;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  color: var(--rt-text-secondary);
+}
+
+.tree-header-actions {
+  display: flex;
+  gap: 1px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.tree-header-btn {
+  background: none;
+  border: none;
+  color: var(--rt-text-tertiary);
+  cursor: pointer;
+  padding: 5px;
+  border-radius: var(--rt-radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  transition: all 0.15s ease;
+}
+
+.tree-header-btn:hover {
+  background: var(--rt-bg-hover);
+  color: var(--rt-accent);
+}
+
+.tree-header-btn:active {
+  transform: scale(0.90);
+}
+
+.tree-header-btn.has-token {
+  color: #22c55e;
+}
+
+.tree-header-btn.gear-active {
+  color: var(--rt-accent);
+  transform: rotate(180deg);
+}
+
+.tree-header-btn.gear-active:active {
+  transform: rotate(180deg) scale(0.90);
+}
+
+.tree-header-title-link {
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.tree-header-title-link:hover {
+  color: var(--rt-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* ═══════════════════════════════════════════════
+   Search — 圆角 pill + 发光聚焦
+   ═══════════════════════════════════════════════ */
+
+.search-bar {
+  padding: 6px 12px 8px;
+  flex-shrink: 0;
+}
+
+.search-input {
+  width: 100%;
+  padding: 7px 12px;
+  border: 1px solid var(--rt-search-border);
+  border-radius: 9px;
+  background: var(--rt-search-bg);
+  color: var(--rt-text);
+  font-size: 12px;
+  font-family: var(--rt-font);
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.search-input:focus {
+  border-color: var(--rt-search-focus-border);
+  background: transparent;
+  box-shadow: 0 0 0 3px var(--rt-search-focus-glow),
+              0 1px 4px rgba(99, 102, 241, 0.08);
+}
+
+.search-input::placeholder {
+  color: var(--rt-text-tertiary);
+  font-size: 11.5px;
+}
+
+/* ═══════════════════════════════════════════════
+   File tree container
+   ═══════════════════════════════════════════════ */
+
+.file-tree {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 6px 0;
+}
+
+.file-tree::-webkit-scrollbar {
+  width: 4px;
+}
+
+.file-tree::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.file-tree::-webkit-scrollbar-thumb {
+  background: var(--rt-scrollbar);
+  border-radius: 9px;
+}
+
+.file-tree::-webkit-scrollbar-thumb:hover {
+  background: var(--rt-scrollbar-hover);
+}
+
+/* ═══════════════════════════════════════════════
+   Tree node — pill 形高亮 + 左侧指示条
+   ═══════════════════════════════════════════════ */
+
+.tree-node {
+  display: flex;
+  align-items: center;
+  height: var(--rt-node-height);
+  padding: 0 8px;
+  margin: 1px 8px;
+  border-radius: var(--rt-radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+  transition: all 0.12s ease;
+  position: relative;
+}
+
+.tree-node:hover {
+  background: var(--rt-bg-hover);
+}
+
+.tree-node.selected {
+  background: var(--rt-bg-selected);
+}
+
+/* 选中指示条 */
+.tree-node.selected::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--rt-selected-bar);
+}
+
+.tree-node-indent {
+  flex-shrink: 0;
+}
+
+/* ─── SVG 图标容器 ──────────────────────────── */
+
+.tree-node-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  margin-right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tree-node-icon.dir {
+  color: var(--rt-icon-dir);
+}
+
+.tree-node-icon.dir.open {
+  color: var(--rt-icon-dir-open);
+}
+
+.tree-node-icon.file {
+  color: var(--rt-icon-file);
+}
+
+/* Chevron */
+.tree-node-chevron {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--rt-icon-chevron);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+              color 0.15s ease;
+  margin-right: 2px;
+}
+
+.tree-node:hover .tree-node-chevron {
+  color: var(--rt-accent);
+}
+
+.tree-node-chevron.expanded {
+  transform: rotate(90deg);
+}
+
+/* 文件名 */
+.tree-node-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: -0.01em;
+  font-size: 12.5px;
+}
+
+.tree-node.selected .tree-node-name {
+  font-weight: 500;
+}
+
+.tree-node-name .highlight {
+  background: var(--rt-highlight);
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+/* dir 行更粗 */
+.tree-node.is-dir .tree-node-name {
+  font-weight: 500;
+  color: var(--rt-text);
+  flex: 1;
+  min-width: 0;
+}
+
+/* ─── Download button (hover-reveal) ────────── */
+
+.tree-node-download {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-left: auto;
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  color: var(--rt-text-tertiary);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.tree-node:hover .tree-node-download {
+  opacity: 1;
+}
+
+.tree-node-download:hover {
+  background: var(--rt-accent-glow);
+  color: var(--rt-accent);
+}
+
+.tree-node-download:active {
+  transform: scale(0.88);
+}
+
+/* ═══════════════════════════════════════════════
+   Resize handle
+   ═══════════════════════════════════════════════ */
+
+.resize-handle {
+  position: absolute;
+  top: 0;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 1;
+}
+
+.resize-handle.left {
+  right: -3px;
+}
+
+.resize-handle.right {
+  left: -3px;
+}
+
+.resize-handle:hover,
+.resize-handle:active {
+  background: var(--rt-accent);
+  opacity: 0.25;
+  border-radius: 3px;
+}
+
+/* ═══════════════════════════════════════════════
+   Toggle button — 胶囊 + 毛玻璃
+   ═══════════════════════════════════════════════ */
+
+.toggle-btn {
+  position: fixed;
+  top: 72px;
+  width: 18px;
+  height: 48px;
+  background: var(--rt-toggle-bg);
+  backdrop-filter: blur(12px) saturate(180%);
+  -webkit-backdrop-filter: blur(12px) saturate(180%);
+  box-shadow: var(--rt-toggle-shadow);
+  border: 1px solid var(--rt-panel-border);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--rt-text-tertiary);
+  z-index: 99998;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.toggle-btn:hover {
+  background: var(--rt-toggle-hover);
+  color: var(--rt-accent);
+  width: 22px;
+  box-shadow: var(--rt-toggle-shadow),
+              0 0 12px var(--rt-accent-glow);
+}
+
+.toggle-btn:active {
+  transform: scale(0.93);
+}
+
+.toggle-btn.left {
+  left: 0;
+  border-left: none;
+  border-radius: 0 12px 12px 0;
+}
+
+.toggle-btn.right {
+  right: 0;
+  border-right: none;
+  border-radius: 12px 0 0 12px;
+}
+
+.toggle-btn.left.panel-visible {
+  left: var(--panel-width, 260px);
+}
+
+/* ═══════════════════════════════════════════════
+   Loading / Error
+   ═══════════════════════════════════════════════ */
+
+.tree-loading,
+.tree-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 16px;
+  gap: 12px;
+  color: var(--rt-text-tertiary);
+  font-size: 12px;
+}
+
+.tree-error {
+  color: #ef4444;
+}
+
+.spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--rt-panel-border);
+  border-top-color: var(--rt-accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ═══════════════════════════════════════════════
+   Search results
+   ═══════════════════════════════════════════════ */
+
+.search-results {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.search-result-item {
+  display: flex;
+  flex-direction: column;
+  padding: 7px 10px;
+  margin: 1px 8px;
+  border-radius: var(--rt-radius-sm);
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.search-result-item:hover {
+  background: var(--rt-bg-hover);
+}
+
+.search-result-name {
+  font-size: 12.5px;
+  color: var(--rt-text);
+}
+
+.search-result-path {
+  font-size: 10.5px;
+  color: var(--rt-text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+  font-family: var(--rt-font-mono);
+}
+
+/* ═══════════════════════════════════════════════
+   Download Toast — 底部毛玻璃 + 彩虹进度条
+   ═══════════════════════════════════════════════ */
+
+.download-toast {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  right: 8px;
+  background: var(--rt-bg);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid var(--rt-panel-border);
+  border-radius: 10px;
+  padding: 10px 12px 6px;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.08),
+              0 0 0 1px var(--rt-panel-border);
+  z-index: 10;
+  animation: toast-slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.download-toast.toast-done {
+  animation: toast-slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+             toast-fade-out 0.4s ease 1.6s forwards;
+}
+
+.download-toast.toast-cancelled {
+  animation: toast-slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+             toast-fade-out 0.4s ease 1.6s forwards;
+}
+
+@keyframes toast-slide-up {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes toast-fade-out {
+  to {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+.toast-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.toast-folder {
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--rt-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 120px;
+}
+
+.toast-status {
+  font-size: 11px;
+  color: var(--rt-text-secondary);
+  flex: 1;
+  font-family: var(--rt-font-mono);
+}
+
+.toast-error .toast-status {
+  color: #ef4444;
+}
+
+.toast-cancel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  color: var(--rt-text-tertiary);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.toast-cancel:hover {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+}
+
+.toast-check {
+  display: flex;
+  align-items: center;
+  color: #22c55e;
+  flex-shrink: 0;
+}
+
+/* 彩虹渐变进度条 */
+.toast-progress-track {
+  height: 3px;
+  background: var(--rt-panel-border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.toast-progress-bar {
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #6366f1 0%, #a78bfa 40%, #f472b6 70%, #fb923c 100%);
+  background-size: 200% 100%;
+  transition: width 0.2s ease;
+}
+
+.toast-progress-bar.error {
+  background: linear-gradient(90deg, #ef4444 0%, #f97316 100%);
+}
+
+/* ═══════════════════════════════════════════════
+   Settings View
+   ═══════════════════════════════════════════════ */
+
+.settings-view {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: settings-fade-in 0.25s ease;
+}
+
+.settings-view::-webkit-scrollbar {
+  width: 4px;
+}
+
+.settings-view::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.settings-view::-webkit-scrollbar-thumb {
+  background: var(--rt-scrollbar);
+  border-radius: 9px;
+}
+
+@keyframes settings-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.settings-section {
+  background: var(--rt-bg-hover);
+  border: 1px solid var(--rt-panel-border);
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.settings-section-title {
+  font-weight: 650;
+  font-size: 12px;
+  color: var(--rt-text);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.settings-label {
+  font-size: 11.5px;
+  color: var(--rt-text-secondary);
+  margin-bottom: 6px;
+}
+
+.settings-desc {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--rt-text-tertiary);
+  margin-bottom: 10px;
+}
+
+.settings-hint {
+  font-size: 10.5px;
+  color: var(--rt-text-tertiary);
+  margin-top: 8px;
+}
+
+/* Status dot */
+.settings-status {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.settings-status.on {
+  background: #22c55e;
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.4);
+}
+
+.settings-status.off {
+  background: var(--rt-text-tertiary);
+  opacity: 0.5;
+}
+
+/* Token input */
+.settings-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--rt-search-border);
+  border-radius: 8px;
+  background: var(--rt-search-bg);
+  color: var(--rt-text);
+  font-size: 12px;
+  font-family: var(--rt-font-mono);
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.settings-input:focus {
+  border-color: var(--rt-search-focus-border);
+  box-shadow: 0 0 0 3px var(--rt-search-focus-glow);
+}
+
+.settings-token-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+/* Buttons */
+.settings-btn {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 7px;
+  font-size: 12px;
+  font-family: var(--rt-font);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.settings-btn:active {
+  transform: scale(0.95);
+}
+
+.settings-btn.save {
+  background: var(--rt-accent);
+  color: #fff;
+}
+
+.settings-btn.save:hover {
+  filter: brightness(1.1);
+}
+
+.settings-btn.remove {
+  background: none;
+  color: #ef4444;
+  padding-left: 0;
+}
+
+.settings-btn.remove:hover {
+  text-decoration: underline;
+}
+
+/* Segmented control */
+.settings-segment {
+  display: flex;
+  background: var(--rt-search-bg);
+  border: 1px solid var(--rt-search-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.settings-segment button {
+  flex: 1;
+  padding: 6px 0;
+  border: none;
+  background: none;
+  font-size: 12px;
+  font-family: var(--rt-font);
+  color: var(--rt-text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.settings-segment button.active {
+  background: var(--rt-accent);
+  color: #fff;
+}
+
+.settings-segment button:not(.active):hover {
+  background: var(--rt-bg-hover);
+}
+
+/* Toggle switch */
+.settings-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.settings-toggle-row .settings-label {
+  margin-bottom: 0;
+}
+
+.settings-toggle {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  border: none;
+  border-radius: 10px;
+  background: var(--rt-text-tertiary);
+  cursor: pointer;
+  transition: background 0.2s ease;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.settings-toggle.on {
+  background: var(--rt-accent);
+}
+
+.settings-toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.settings-toggle.on .settings-toggle-thumb {
+  transform: translateX(16px);
+}
+
+/* Range slider row */
+.settings-range-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+}
+
+.settings-range-row .settings-label {
+  margin-bottom: 0;
+}
+
+.settings-range-value {
+  font-size: 12px;
+  color: var(--rt-text-secondary);
+  font-variant-numeric: tabular-nums;
+  min-width: 32px;
+  text-align: right;
+}
+
+/* Range slider */
+.settings-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--rt-search-border);
+  outline: none;
+  margin: 8px 0 12px;
+  cursor: pointer;
+}
+
+.settings-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--rt-accent);
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+  transition: transform 0.15s ease;
+}
+
+.settings-range::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+.settings-range::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: none;
+  border-radius: 50%;
+  background: var(--rt-accent);
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
+/* ═══════════════════════════════════════════════
+   TreePad button — 胶囊 toggle 下方
+   ═══════════════════════════════════════════════ */
+
+.treepad-btn {
+  position: fixed;
+  top: 128px;
+  width: 18px;
+  height: 48px;
+  background: var(--rt-toggle-bg);
+  backdrop-filter: blur(12px) saturate(180%);
+  -webkit-backdrop-filter: blur(12px) saturate(180%);
+  box-shadow: var(--rt-toggle-shadow);
+  border: 1px solid var(--rt-panel-border);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--rt-text-tertiary);
+  z-index: 99998;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.treepad-btn:hover {
+  background: var(--rt-toggle-hover);
+  color: var(--rt-accent);
+  width: 22px;
+  box-shadow: var(--rt-toggle-shadow),
+              0 0 12px var(--rt-accent-glow);
+}
+
+.treepad-btn:active {
+  transform: scale(0.93);
+}
+
+.treepad-btn.left {
+  left: 0;
+  border-left: none;
+  border-radius: 0 12px 12px 0;
+}
+
+.treepad-btn.right {
+  right: 0;
+  border-right: none;
+  border-radius: 12px 0 0 12px;
+}
+
+.treepad-btn.left.panel-visible {
+  left: var(--panel-width, 260px);
+}
+
+.treepad-btn.right.panel-visible {
+  right: var(--panel-width, 260px);
+}
+
+/* ═══════════════════════════════════════════════
+   TreePad dialog — 居中贴底 + 可拖动/缩放
+   ═══════════════════════════════════════════════ */
+
+.treepad-dialog {
+  position: fixed;
+  /* default: centered horizontally, stuck to bottom */
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--rt-bg);
+  backdrop-filter: blur(var(--rt-blur)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--rt-blur)) saturate(180%);
+  border: 1px solid var(--rt-panel-border);
+  border-radius: 14px 14px 0 0;
+  box-shadow: 0 -4px 40px rgba(0, 0, 0, 0.10),
+              0 0 0 1px var(--rt-panel-border);
+  display: flex;
+  flex-direction: column;
+  font-family: var(--rt-font);
+  font-size: var(--rt-font-size);
+  color: var(--rt-text);
+  z-index: 100000;
+  animation: treepad-slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+}
+
+/* once user drags, switch to absolute positioning */
+.treepad-dialog.positioned {
+  bottom: auto;
+  left: auto;
+  transform: none;
+  border-radius: 14px;
+}
+
+@keyframes treepad-slide-up {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.treepad-dialog.positioned {
+  animation: none;
+}
+
+/* ── Resize handles ──────────────────────────── */
+.treepad-resize {
+  position: absolute;
+  z-index: 2;
+}
+
+.treepad-resize.n { top: -3px; left: 8px; right: 8px; height: 6px; cursor: n-resize; }
+.treepad-resize.s { bottom: -3px; left: 8px; right: 8px; height: 6px; cursor: s-resize; }
+.treepad-resize.e { right: -3px; top: 8px; bottom: 8px; width: 6px; cursor: e-resize; }
+.treepad-resize.w { left: -3px; top: 8px; bottom: 8px; width: 6px; cursor: w-resize; }
+.treepad-resize.ne { top: -3px; right: -3px; width: 12px; height: 12px; cursor: ne-resize; }
+.treepad-resize.nw { top: -3px; left: -3px; width: 12px; height: 12px; cursor: nw-resize; }
+.treepad-resize.se { bottom: -3px; right: -3px; width: 12px; height: 12px; cursor: se-resize; }
+.treepad-resize.sw { bottom: -3px; left: -3px; width: 12px; height: 12px; cursor: sw-resize; }
+
+/* Header (drag handle) */
+.treepad-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--rt-header-border);
+  flex-shrink: 0;
+  cursor: grab;
+  user-select: none;
+}
+
+.treepad-header:active {
+  cursor: grabbing;
+}
+
+.treepad-header-title {
+  font-weight: 650;
+  font-size: 13px;
+  letter-spacing: 0.01em;
+  flex: 1;
+}
+
+.treepad-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.treepad-header-reset,
+.treepad-header-minimize,
+.treepad-header-close {
+  background: none;
+  border: none;
+  color: var(--rt-text-tertiary);
+  cursor: pointer;
+  padding: 5px;
+  border-radius: var(--rt-radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  position: relative;
+}
+
+/* Reset button - center/target icon */
+.treepad-header-reset:hover {
+  background: var(--rt-bg-hover);
+  color: #3b82f6;
+}
+
+.treepad-header-reset:hover svg {
+  animation: treepad-reset-pulse 0.4s ease;
+}
+
+@keyframes treepad-reset-pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(0.85); }
+  100% { transform: scale(1); }
+}
+
+/* Minimize button - standard minimize */
+.treepad-header-minimize:hover {
+  background: var(--rt-bg-hover);
+  color: #f59e0b;
+}
+
+/* Close button */
+.treepad-header-close:hover {
+  background: var(--rt-bg-hover);
+  color: #ef4444;
+}
+
+.treepad-header-reset:active,
+.treepad-header-minimize:active,
+.treepad-header-close:active {
+  transform: scale(0.88);
+}
+
+/* ── Minimized pill ──────────────────────────── */
+.treepad-pill {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  background: var(--rt-bg);
+  backdrop-filter: blur(12px) saturate(180%);
+  -webkit-backdrop-filter: blur(12px) saturate(180%);
+  border: 1px solid var(--rt-panel-border);
+  border-bottom: none;
+  border-radius: 10px 10px 0 0;
+  box-shadow: 0 -2px 16px rgba(0, 0, 0, 0.08);
+  font-family: var(--rt-font);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--rt-text);
+  cursor: pointer;
+  z-index: 100000;
+  user-select: none;
+  transition: all 0.2s ease;
+  animation: treepad-pill-up 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.treepad-pill:hover {
+  background: var(--rt-toggle-hover);
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.12);
+}
+
+.treepad-pill:active {
+  transform: translateX(-50%) scale(0.97);
+}
+
+.treepad-pill-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--rt-accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+@keyframes treepad-pill-up {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+/* Disclaimer */
+.treepad-disclaimer {
+  padding: 6px 14px;
+  font-size: 10.5px;
+  color: var(--rt-text-tertiary);
+  border-bottom: 1px solid var(--rt-panel-border);
+  flex-shrink: 0;
+}
+
+/* Messages area */
+.treepad-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.treepad-messages::-webkit-scrollbar {
+  width: 4px;
+}
+
+.treepad-messages::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.treepad-messages::-webkit-scrollbar-thumb {
+  background: var(--rt-scrollbar);
+  border-radius: 9px;
+}
+
+/* Empty state */
+.treepad-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex: 1;
+  color: var(--rt-text-tertiary);
+  font-size: 12px;
+}
+
+/* Chat bubbles */
+.treepad-bubble {
+  max-width: 85%;
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.treepad-bubble.user {
+  align-self: flex-end;
+  background: var(--rt-accent);
+  color: #fff;
+  border-bottom-right-radius: 4px;
+}
+
+.treepad-bubble.assistant {
+  align-self: flex-start;
+  background: var(--rt-bg-hover);
+  border-bottom-left-radius: 4px;
+}
+
+.treepad-bubble-text {
+  margin: 0;
+  white-space: pre-wrap;
+  font-family: var(--rt-font);
+  font-size: inherit;
+  line-height: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+/* ── Markdown in assistant bubbles ─────────── */
+.treepad-md {
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.treepad-md > *:first-child { margin-top: 0; }
+.treepad-md > *:last-child { margin-bottom: 0; }
+
+.treepad-md p { margin: 6px 0; }
+
+.treepad-md h1,
+.treepad-md h2,
+.treepad-md h3,
+.treepad-md h4 {
+  font-weight: 650;
+  margin: 10px 0 4px;
+}
+.treepad-md h1 { font-size: 15px; }
+.treepad-md h2 { font-size: 14px; }
+.treepad-md h3 { font-size: 13px; }
+
+.treepad-md strong { font-weight: 650; }
+
+.treepad-md code {
+  font-family: var(--rt-font-mono);
+  font-size: 11.5px;
+  background: rgba(99, 102, 241, 0.08);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.treepad-md pre {
+  margin: 6px 0;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 8px;
+  overflow-x: auto;
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+:host(.dark) .treepad-md pre {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.treepad-md pre code {
+  background: none;
+  padding: 0;
+  font-size: inherit;
+}
+
+.treepad-md ul,
+.treepad-md ol {
+  margin: 6px 0;
+  padding-left: 20px;
+}
+
+.treepad-md li { margin: 2px 0; }
+
+.treepad-md blockquote {
+  margin: 6px 0;
+  padding: 4px 10px;
+  border-left: 3px solid var(--rt-accent);
+  color: var(--rt-text-secondary);
+}
+
+.treepad-md a {
+  color: var(--rt-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.treepad-md hr {
+  border: none;
+  border-top: 1px solid var(--rt-panel-border);
+  margin: 8px 0;
+}
+
+.treepad-md table {
+  border-collapse: collapse;
+  margin: 6px 0;
+  font-size: 11.5px;
+  width: 100%;
+}
+
+.treepad-md th,
+.treepad-md td {
+  border: 1px solid var(--rt-panel-border);
+  padding: 4px 8px;
+  text-align: left;
+}
+
+.treepad-md th {
+  font-weight: 600;
+  background: rgba(0, 0, 0, 0.03);
+}
+
+:host(.dark) .treepad-md th {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* Thinking dots */
+.treepad-thinking {
+  display: flex;
+  gap: 4px;
+  padding: 2px 0;
+}
+
+.treepad-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--rt-text-tertiary);
+  animation: treepad-bounce 1.2s infinite;
+}
+
+.treepad-dot:nth-child(2) { animation-delay: 0.2s; }
+.treepad-dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes treepad-bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+
+/* Error */
+.treepad-error {
+  font-size: 11px;
+  color: #ef4444;
+  padding: 4px 0;
+}
+
+/* Input area */
+.treepad-input-area {
+  border-top: 1px solid var(--rt-panel-border);
+  padding: 10px 12px 8px;
+  flex-shrink: 0;
+}
+
+/* File chip */
+.treepad-file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  background: var(--rt-bg-hover);
+  border: 1px solid var(--rt-panel-border);
+  border-radius: 6px;
+  font-size: 11px;
+  color: var(--rt-text-secondary);
+  margin-bottom: 8px;
+}
+
+.treepad-file-name {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.treepad-file-remove {
+  background: none;
+  border: none;
+  color: var(--rt-text-tertiary);
+  cursor: pointer;
+  padding: 1px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  transition: color 0.15s ease;
+}
+
+.treepad-file-remove:hover {
+  color: #ef4444;
+}
+
+/* Input row */
+.treepad-input-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.treepad-input {
+  flex: 1;
+  padding: 7px 10px;
+  border: 1px solid var(--rt-search-border);
+  border-radius: 9px;
+  background: var(--rt-search-bg);
+  color: var(--rt-text);
+  font-size: 12px;
+  font-family: var(--rt-font);
+  outline: none;
+  resize: none;
+  max-height: 80px;
+  transition: border-color 0.2s ease;
+}
+
+.treepad-input:focus {
+  border-color: var(--rt-search-focus-border);
+  box-shadow: 0 0 0 3px var(--rt-search-focus-glow);
+}
+
+.treepad-input::placeholder {
+  color: var(--rt-text-tertiary);
+  font-size: 11.5px;
+}
+
+.treepad-send {
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 8px;
+  background: var(--rt-accent);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.treepad-send:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.treepad-send:active:not(:disabled) {
+  transform: scale(0.93);
+}
+
+.treepad-send:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Model label */
+.treepad-model-label {
+  font-size: 10px;
+  color: var(--rt-text-tertiary);
+  margin-top: 6px;
+  font-family: var(--rt-font-mono);
+}
