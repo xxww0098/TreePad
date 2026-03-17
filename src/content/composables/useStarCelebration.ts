@@ -141,8 +141,6 @@ export function useStarCelebration() {
   const settings = useSettingsStore()
 
   function handleClick(e: Event) {
-    if (!settings.celebrateStar) return
-
     const target = e.target as HTMLElement
     if (!target) return
 
@@ -156,7 +154,9 @@ export function useStarCelebration() {
 
     // Find the button for positioning
     const btn = target.closest('button') || form.querySelector('button')
-    if (btn) celebrate(btn)
+    if (btn) {
+      if (settings.celebrateStar) celebrate(btn)
+    }
   }
 
   onMounted(() => {

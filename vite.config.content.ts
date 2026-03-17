@@ -13,7 +13,7 @@ export default defineConfig({
     emptyOutDir: true,
     lib: {
       entry: resolve(__dirname, 'src/content/index.ts'),
-      name: 'RepoTree',
+      name: 'TreePad',
       formats: ['iife'],
       fileName: () => 'content.js',
     },

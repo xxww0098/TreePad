@@ -30,9 +30,12 @@
 
 ### 🔑 GitHub Authentication
 
-- Set a Personal Access Token (public_repo scope) to raise the API rate limit from 60 → 5,000 req/hr
-- Falls back to GitHub session cookies automatically — zero config for logged-in users
-- Token is encrypted with AES-GCM before storage; never stored in plaintext
+- Supports fine-grained PATs, classic PATs, and GitHub OAuth access tokens in the same encrypted token field
+- Optional GitHub OAuth Device Flow sign-in for extension-friendly login (works with an OAuth App Client ID, no embedded client secret)
+- Falls back to GitHub session cookies automatically — zero config for logged-in users when GitHub accepts the browser session for API calls
+- Shows current auth mode plus remaining GitHub API quota directly in Settings
+- Caches default branches and deduplicates in-flight GitHub requests to reduce unnecessary API usage
+- Tokens are encrypted with AES-GCM before storage; never stored in plaintext
 
 ### ⚙️ Settings
 
@@ -106,6 +109,16 @@ Content script ↔ background communicate via `chrome.runtime.sendMessage` (one-
 1. `bun install`
 2. `bun run build`
 3. Open `chrome://extensions` → **Load unpacked** → select the `dist/` folder
+
+## Release OAuth Setup
+
+1. Copy `.env.example` to `.env.production.local`
+2. Fill `VITE_GITHUB_OAUTH_CLIENT_ID` with your GitHub OAuth App client ID
+3. Fill `VITE_GITHUB_OAUTH_APP_HOMEPAGE` and `TREEPAD_EXTENSION_ID`
+4. Run `./build.sh` or `./build.sh --zip`
+5. Open the generated `GITHUB_OAUTH_SETUP.md` in the release output folder
+
+Detailed guide: [docs/GITHUB_OAUTH.md](./docs/GITHUB_OAUTH.md)
 
 ---
 

@@ -79,6 +79,9 @@ cp "$ROOT/dist/content.js"         "$OUT/"
 cp "$ROOT/dist/background.js"     "$OUT/"
 cp "$ROOT/public/manifest.json"   "$OUT/"
 cp "$ROOT/public/icons"/*         "$OUT/icons/"
+mkdir -p "$OUT/docs"
+cp "$ROOT/docs/GITHUB_OAUTH.md"   "$OUT/docs/"
+node "$ROOT/scripts/write_oauth_release_info.mjs" "$ROOT" "$OUT"
 
 # 5. 构建摘要
 FILE_COUNT=$(find "$OUT" -type f | wc -l | tr -d ' ')

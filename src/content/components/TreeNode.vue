@@ -74,8 +74,10 @@ function onDownloadClick(e: MouseEvent) {
     <!-- Download button for directories -->
     <button
       v-if="node.isDir"
+      type="button"
       class="tree-node-download"
       :title="t('tree.downloadZip')"
+      :aria-label="t('tree.downloadZip')"
       @click="onDownloadClick"
     >
       <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">

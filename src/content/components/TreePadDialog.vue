@@ -6,6 +6,10 @@ import { useI18n } from '../composables/useI18n'
 import { useTreeStore } from '../stores/tree'
 import type { AIChatMessage } from '../../shared/types'
 
+const props = defineProps<{
+  revealSignal: number
+}>()
+
 const emit = defineEmits<{ close: [] }>()
 
 const settings = useSettingsStore()
@@ -20,9 +24,16 @@ function renderMarkdown(text: string): string {
 }
 
 // ── Chat state ──────────────────────────────────────────────
+interface AttachedFile {
+  path: string
+  name: string
+}
+
 interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
+  attachedFiles?: AttachedFile[]
+  attachedFilesContext?: string
 }
 
 const messages = ref<ChatMessage[]>([])
@@ -32,33 +43,243 @@ const error = ref('')
 const messagesEl = ref<HTMLElement | null>(null)
 const inputEl = ref<HTMLTextAreaElement | null>(null)
 const dialogEl = ref<HTMLElement | null>(null)
-const fileAttached = ref(true)
-const fileName = ref('')
 const minimized = ref(false)
 
-// ── Dialog geometry (draggable + resizable) ─────────────────
-const MIN_W = 360
-const MIN_H = 320
-const DEFAULT_W = 460
-const DEFAULT_H = 540
+// ── Multi-file attachment ────────────────────────────────────
+const attachedFiles = ref<AttachedFile[]>([])
+const mentionPanelEl = ref<HTMLElement | null>(null)
+const mentionOpen = ref(false)
+const mentionQuery = ref('')
+const mentionActiveIndex = ref(0)
+const mentionRange = ref<{ start: number; end: number } | null>(null)
 
-const dlgW = ref(settings.treepadW || DEFAULT_W)
-const dlgH = ref(settings.treepadH || DEFAULT_H)
+const allFiles = computed(() => store.nodes.filter(node => !node.isDir))
+
+function scoreMentionMatch(path: string, name: string, query: string): number {
+  const q = query.toLowerCase()
+  const lowerName = name.toLowerCase()
+  const lowerPath = path.toLowerCase()
+
+  if (lowerName === q) return 0
+  if (lowerName.startsWith(q)) return 1
+  if (lowerName.includes(q)) return 2
+  if (lowerPath.endsWith(q)) return 3
+  if (lowerPath.includes(q)) return 4
+  return Number.POSITIVE_INFINITY
+}
+
+const mentionFiles = computed(() => {
+  const candidates = allFiles.value.filter(node => !isFileAttached(node.path))
+  const q = mentionQuery.value.trim()
+
+  if (!q) return candidates.slice(0, 7)
+
+  return candidates
+    .map((node) => ({
+      node,
+      score: scoreMentionMatch(node.path, node.name, q),
+    }))
+    .filter((entry) => Number.isFinite(entry.score))
+    .sort((a, b) => a.score - b.score || a.node.path.length - b.node.path.length)
+    .slice(0, 7)
+    .map((entry) => entry.node)
+})
+
+watch(mentionFiles, (files) => {
+  if (!files.length) {
+    mentionActiveIndex.value = 0
+    return
+  }
+  if (mentionActiveIndex.value > files.length - 1) {
+    mentionActiveIndex.value = files.length - 1
+  }
+})
+
+function isFileAttached(path: string): boolean {
+  return attachedFiles.value.some(f => f.path === path)
+}
+
+function attachFile(path: string, name: string) {
+  if (!isFileAttached(path)) {
+    attachedFiles.value.push({ path, name })
+  }
+}
+
+function removeFile(path: string) {
+  const idx = attachedFiles.value.findIndex(f => f.path === path)
+  if (idx >= 0) attachedFiles.value.splice(idx, 1)
+}
+
+function closeMention() {
+  mentionOpen.value = false
+  mentionQuery.value = ''
+  mentionActiveIndex.value = 0
+  mentionRange.value = null
+}
+
+function updateMentionState() {
+  const el = inputEl.value
+  if (!el) {
+    closeMention()
+    return
+  }
+
+  const caret = el.selectionStart ?? input.value.length
+  const beforeCaret = input.value.slice(0, caret)
+  const mentionStart = beforeCaret.lastIndexOf('@')
+
+  if (mentionStart < 0) {
+    closeMention()
+    return
+  }
+
+  const prevChar = beforeCaret[mentionStart - 1] ?? ''
+  if (prevChar && /[A-Za-z0-9._%+-]/.test(prevChar)) {
+    closeMention()
+    return
+  }
+
+  const query = beforeCaret.slice(mentionStart + 1)
+  if (/\s/.test(query)) {
+    closeMention()
+    return
+  }
+
+  const nextQuery = query.trimStart()
+  if (mentionQuery.value !== nextQuery) {
+    mentionActiveIndex.value = 0
+  }
+
+  mentionOpen.value = true
+  mentionQuery.value = nextQuery
+  mentionRange.value = { start: mentionStart, end: caret }
+}
+
+function syncMentionState() {
+  nextTick(() => updateMentionState())
+}
+
+function onInputKeyup(e: KeyboardEvent) {
+  if (['ArrowDown', 'ArrowUp', 'Enter', 'Tab', 'Escape'].includes(e.key)) return
+  syncMentionState()
+}
+
+function selectMentionFile(path: string, name: string) {
+  const range = mentionRange.value
+  attachFile(path, name)
+
+  if (range) {
+    const before = input.value.slice(0, range.start)
+    const after = input.value.slice(range.end)
+    const nextAfter = before.endsWith(' ') && after.startsWith(' ') ? after.slice(1) : after
+
+    input.value = `${before}${nextAfter}`
+
+    nextTick(() => {
+      const el = inputEl.value
+      if (!el) return
+      const caret = before.length
+      el.focus()
+      el.setSelectionRange(caret, caret)
+    })
+  }
+
+  closeMention()
+}
+
+function moveMention(step: number) {
+  if (!mentionFiles.value.length) return
+  const lastIndex = mentionFiles.value.length - 1
+  const nextIndex = mentionActiveIndex.value + step
+  mentionActiveIndex.value = nextIndex < 0
+    ? lastIndex
+    : nextIndex > lastIndex
+      ? 0
+      : nextIndex
+}
+
+function onDocumentMouseDown(e: MouseEvent) {
+  if (!mentionOpen.value) return
+  // Use composedPath() to see through Shadow DOM boundaries.
+  // e.target is retargeted to the shadow host when the listener is on document,
+  // so contains() checks against internal elements always fail.
+  const path = e.composedPath()
+  const inputNode = inputEl.value as Node | null
+  const panelNode = mentionPanelEl.value as Node | null
+  if ((inputNode && path.includes(inputNode)) || (panelNode && path.includes(panelNode))) return
+  closeMention()
+}
+let blurMinimizeTimer: number | null = null
+
+// ── Dialog geometry (draggable + resizable) ─────────────────
+const VIEWPORT_MARGIN = 24
+const MIN_W = 520
+const MIN_H = 420
+const DEFAULT_W = 680
+const DEFAULT_H = 720
+
+function getDialogMaxWidth() {
+  return Math.max(320, window.innerWidth - VIEWPORT_MARGIN)
+}
+
+function getDialogMaxHeight() {
+  return Math.max(320, window.innerHeight - VIEWPORT_MARGIN)
+}
+
+function getDialogMinWidth() {
+  return Math.min(MIN_W, getDialogMaxWidth())
+}
+
+function getDialogMinHeight() {
+  return Math.min(MIN_H, getDialogMaxHeight())
+}
+
+function getDialogDefaultWidth() {
+  return Math.min(DEFAULT_W, getDialogMaxWidth())
+}
+
+function getDialogDefaultHeight() {
+  return Math.min(DEFAULT_H, getDialogMaxHeight())
+}
+
+function clampDialogWidth(value: number) {
+  return Math.min(getDialogMaxWidth(), Math.max(getDialogMinWidth(), Math.round(value)))
+}
+
+function clampDialogHeight(value: number) {
+  return Math.min(getDialogMaxHeight(), Math.max(getDialogMinHeight(), Math.round(value)))
+}
+
+const dlgW = ref(clampDialogWidth(settings.treepadW || getDialogDefaultWidth()))
+const dlgH = ref(clampDialogHeight(settings.treepadH || getDialogDefaultHeight()))
 // null = use CSS default (centered bottom)
 const dlgX = ref<number | null>(null)
 const dlgY = ref<number | null>(null)
 
 function persistSize() {
-  settings.treepadW = dlgW.value
-  settings.treepadH = dlgH.value
+  settings.treepadW = clampDialogWidth(dlgW.value)
+  settings.treepadH = clampDialogHeight(dlgH.value)
 }
 
 function resetSizeAndPosition() {
-  dlgW.value = DEFAULT_W
-  dlgH.value = DEFAULT_H
+  dlgW.value = getDialogDefaultWidth()
+  dlgH.value = getDialogDefaultHeight()
   dlgX.value = null
   dlgY.value = null
   persistSize()
+}
+
+function syncDialogBounds(shouldPersist = false) {
+  const nextW = clampDialogWidth(dlgW.value || getDialogDefaultWidth())
+  const nextH = clampDialogHeight(dlgH.value || getDialogDefaultHeight())
+  const changed = nextW !== dlgW.value || nextH !== dlgH.value
+
+  dlgW.value = nextW
+  dlgH.value = nextH
+
+  if (changed && shouldPersist) {
+    persistSize()
+  }
 }
 
 const dialogStyle = computed(() => {
@@ -134,10 +355,10 @@ function onResizeMove(e: PointerEvent) {
   let newW = ow, newH = oh
 
   // Symmetric: dragging one side expands both sides equally (2x delta)
-  if (edge.includes('e')) newW = Math.max(MIN_W, ow + dx * 2)
-  if (edge.includes('w')) newW = Math.max(MIN_W, ow - dx * 2)
-  if (edge.includes('s')) newH = Math.max(MIN_H, oh + dy * 2)
-  if (edge.includes('n')) newH = Math.max(MIN_H, oh - dy * 2)
+  if (edge.includes('e')) newW = clampDialogWidth(ow + dx * 2)
+  if (edge.includes('w')) newW = clampDialogWidth(ow - dx * 2)
+  if (edge.includes('s')) newH = clampDialogHeight(oh + dy * 2)
+  if (edge.includes('n')) newH = clampDialogHeight(oh - dy * 2)
 
   dlgW.value = newW
   dlgH.value = newH
@@ -161,43 +382,102 @@ function onResizeEnd() {
 function clampX(x: number) { return Math.max(0, Math.min(x, window.innerWidth - 60)) }
 function clampY(y: number) { return Math.max(0, Math.min(y, window.innerHeight - 40)) }
 
+function clearBlurMinimizeTimer() {
+  if (blurMinimizeTimer !== null) {
+    window.clearTimeout(blurMinimizeTimer)
+    blurMinimizeTimer = null
+  }
+}
+
+function isFocusInsideDialog(): boolean {
+  const dialog = dialogEl.value
+  if (!dialog) return false
+  if (dialog.matches(':focus-within')) return true
+
+  const root = dialog.getRootNode()
+  const active = root instanceof ShadowRoot
+    ? root.activeElement
+    : document.activeElement
+
+  return !!active && dialog.contains(active)
+}
+
 // ── Auto-minimize on blur ────────────────────────────────────
 function onDialogBlur(e: FocusEvent) {
+  clearBlurMinimizeTimer()
   // Don't minimize during drag/resize operations
   if (dragStart || resizeStart) return
   // Don't minimize if focus moved to another element inside the dialog
   const dialog = dialogEl.value
   if (!dialog) return
-  const related = e.relatedTarget as Node | null
-  if (related && dialog.contains(related)) return
+  const related = e.relatedTarget as HTMLElement | null
+  if (related && (dialog.contains(related) || related.closest('[data-treepad-trigger="true"]'))) {
+    return
+  }
   // Don't minimize while AI is streaming
   if (loading.value) return
-  minimized.value = true
+  blurMinimizeTimer = window.setTimeout(() => {
+    blurMinimizeTimer = null
+    if (isFocusInsideDialog()) return
+    if (dragStart || resizeStart || loading.value) return
+    minimized.value = true
+  }, 120)
+}
+
+function onDialogFocusIn() {
+  clearBlurMinimizeTimer()
+}
+
+function onWindowResize() {
+  syncDialogBounds()
 }
 
 // ── Focus dialog when restored from minimized ───────────────
 watch(minimized, (val) => {
-  if (!val) {
-    nextTick(() => {
-      inputEl.value?.focus() || dialogEl.value?.focus()
-    })
+  if (val) {
+    closeMention()
+    return
   }
+
+  nextTick(() => {
+    inputEl.value?.focus() || dialogEl.value?.focus()
+  })
 })
+
+watch(
+  () => props.revealSignal,
+  () => {
+    clearBlurMinimizeTimer()
+    minimized.value = !minimized.value
+    if (!minimized.value) {
+      nextTick(() => {
+        inputEl.value?.focus() || dialogEl.value?.focus()
+      })
+    }
+  },
+)
 
 // ── Lifecycle ───────────────────────────────────────────────
 onMounted(() => {
+  syncDialogBounds(true)
   const repo = store.currentRepo
   if (repo?.path) {
-    fileName.value = repo.path.split('/').pop() || repo.path
+    const name = repo.path.split('/').pop() || repo.path
+    attachedFiles.value = [{ path: repo.path, name }]
   }
   inputEl.value?.focus()
+  document.addEventListener('mousedown', onDocumentMouseDown)
+  window.addEventListener('resize', onWindowResize)
 })
 
 onUnmounted(() => {
+  clearBlurMinimizeTimer()
   document.removeEventListener('pointermove', onDragMove)
   document.removeEventListener('pointerup', onDragEnd)
   document.removeEventListener('pointermove', onResizeMove)
   document.removeEventListener('pointerup', onResizeEnd)
+  document.removeEventListener('mousedown', onDocumentMouseDown)
+  window.removeEventListener('resize', onWindowResize)
 })
 
 // ── Chat logic ──────────────────────────────────────────────
@@ -211,44 +491,81 @@ function scrollToBottom() {
   })
 }
 
+function cloneAttachedFiles(files: AttachedFile[]): AttachedFile[] {
+  return files.map((file) => ({ ...file }))
+}
+
+async function buildAttachedFilesContext(files: AttachedFile[]): Promise<string> {
+  const repo = store.currentRepo
+  if (!repo || files.length === 0) return ''
+
+  const fetches = files.map(async (file) => {
+    try {
+      const res = await chrome.runtime.sendMessage({
+        type: 'FETCH_RAW',
+        owner: repo.owner,
+        repo: repo.repo,
+        branch: repo.branch,
+        path: file.path,
+      })
+      if (res.base64) {
+        return { path: file.path, content: atob(res.base64) }
+      }
+    } catch {
+      // Skip files that fail to load so the rest of the message can continue.
+    }
+    return null
+  })
+
+  const results = (await Promise.all(fetches)).filter(Boolean) as Array<{ path: string; content: string }>
+  if (results.length === 0) return ''
+  return results.map((result) => `File: ${result.path}\n\`\`\`\n${result.content}\n\`\`\``).join('\n\n')
+}
+
+function buildAiMessagesFromHistory(): AIChatMessage[] {
+  const aiMessages: AIChatMessage[] = []
+
+  for (const msg of messages.value) {
+    if (msg.role === 'user' && msg.attachedFiles?.length && msg.attachedFilesContext) {
+      const fileCount = msg.attachedFiles.length
+      const desc = fileCount === 1
+        ? `The user attached a file named "${msg.attachedFiles[0].name}" to their next message.`
+        : `The user attached ${fileCount} files to their next message.`
+
+      aiMessages.push({
+        role: 'system',
+        content: `${desc} Here are the file contents:\n\n${msg.attachedFilesContext}\n\nUse these files as context for that user message and relevant follow-up questions. Use markdown formatting.`,
+      })
+    }
+
+    aiMessages.push({ role: msg.role, content: msg.content })
+  }
+
+  return aiMessages
+}
+
 async function send() {
   const question = input.value.trim()
   if (!question || loading.value) return
 
   error.value = ''
-  messages.value.push({ role: 'user', content: question })
+  const outgoingFiles = cloneAttachedFiles(attachedFiles.value)
+  const userMessage: ChatMessage = {
+    role: 'user',
+    content: question,
+    attachedFiles: outgoingFiles,
+  }
+
+  messages.value.push(userMessage)
   input.value = ''
+  attachedFiles.value = []
+  closeMention()
   loading.value = true
   scrollToBottom()
 
   try {
-    let fileContent = ''
-    if (fileAttached.value) {
-      const repo = store.currentRepo
-      if (repo) {
-        const res = await chrome.runtime.sendMessage({
-          type: 'FETCH_RAW',
-          owner: repo.owner,
-          repo: repo.repo,
-          branch: repo.branch,
-          path: repo.path,
-        })
-        if (res.base64) {
-          fileContent = atob(res.base64)
-        }
-      }
-    }
-
-    const aiMessages: AIChatMessage[] = []
-    if (fileContent) {
-      aiMessages.push({
-        role: 'system',
-        content: `The user is viewing a file named "${fileName.value}". Here is the file content:\n\n\`\`\`\n${fileContent}\n\`\`\`\n\nAnswer questions about this file concisely. Use markdown formatting.`,
-      })
-    }
-    for (const msg of messages.value) {
-      aiMessages.push({ role: msg.role, content: msg.content })
-    }
+    userMessage.attachedFilesContext = await buildAttachedFilesContext(outgoingFiles)
+    const aiMessages = buildAiMessagesFromHistory()
 
     // Push an empty assistant message that we'll stream into
     const assistantIdx = messages.value.length
@@ -300,6 +617,39 @@ async function send() {
 }
 
 function onKeydown(e: KeyboardEvent) {
+  if (mentionOpen.value) {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      moveMention(1)
+      return
+    }
+
+    if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      moveMention(-1)
+      return
+    }
+
+    if ((e.key === 'Enter' && !e.shiftKey) || e.key === 'Tab') {
+      e.preventDefault()
+      if (mentionFiles.value.length) {
+        const activeFile = mentionFiles.value[mentionActiveIndex.value] ?? mentionFiles.value[0]
+        if (activeFile) {
+          selectMentionFile(activeFile.path, activeFile.name)
+        }
+      } else {
+        closeMention()
+      }
+      return
+    }
+
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      closeMention()
+      return
+    }
+  }
+
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault()
     send()
@@ -309,7 +659,13 @@ function onKeydown(e: KeyboardEvent) {
 
 <template>
   <!-- Minimized pill -->
-  <div v-if="minimized" class="treepad-pill" @click="minimized = false">
+  <button
+    v-if="minimized"
+    type="button"
+    class="treepad-pill"
+    :aria-label="t('treepad.title')"
+    @click="minimized = false"
+  >
     <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
       <path d="M1 2.75C1 1.784 1.784 1 2.75 1h10.5c.966 0 1.75.784 1.75 1.75v7.5A1.75 1.75 0 0113.25 12H9.06l-2.573 2.573A1.458 1.458 0 014 13.543V12H2.75A1.75 1.75 0 011 10.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h2a.75.75 0 01.75.75v2.19l2.72-2.72a.749.749 0 01.53-.22h4.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25H2.75z" />
     </svg>
@@ -319,7 +675,7 @@ function onKeydown(e: KeyboardEvent) {
     <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" opacity="0.5">
       <path d="M3.22 10.53a.749.749 0 010-1.06l4.25-4.25a.749.749 0 011.06 0l4.25 4.25a.749.749 0 11-1.06 1.06L8 6.81 4.28 10.53a.749.749 0 01-1.06 0z" />
     </svg>
-  </div>
+  </button>
 
   <!-- Full dialog -->
   <div
@@ -329,6 +685,7 @@ function onKeydown(e: KeyboardEvent) {
     :class="{ positioned: isPositioned }"
     :style="dialogStyle"
     tabindex="-1"
+    @focusin="onDialogFocusIn"
     @focusout="onDialogBlur"
   >
     <!-- Resize handles -->
@@ -346,28 +703,42 @@ function onKeydown(e: KeyboardEvent) {
       <span class="treepad-header-title">{{ t('treepad.title') }}</span>
       <div class="treepad-header-actions">
         <!-- Reset size -->
-        <button class="treepad-header-reset" :title="t('treepad.resetSize')" @click="resetSizeAndPosition">
+        <button
+          type="button"
+          class="treepad-header-reset"
+          :title="t('treepad.resetSize')"
+          :aria-label="t('treepad.resetSize')"
+          @click="resetSizeAndPosition"
+        >
           <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
             <path d="M3.5 3.5a.75.75 0 00-1.06 1.06L4.44 6.56a.75.75 0 001.06-1.06L3.5 3.5zM12.5 3.5a.75.75 0 011.06 1.06l-2 2a.75.75 0 01-1.06-1.06l2-2zM3.5 12.5a.75.75 0 001.06 1.06l2-2a.75.75 0 00-1.06-1.06l-2 2zM12.5 12.5a.75.75 0 01-1.06 1.06l2-2a.75.75 0 011.06 1.06l-2 2zM8 2a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5A.75.75 0 018 2zM2 8a.75.75 0 01.75-.75h1.5a.75.75 0 010 1.5h-1.5A.75.75 0 012 8zM12.25 7.25a.75.75 0 010 1.5h1.5a.75.75 0 000-1.5h-1.5zM8 12.25a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5a.75.75 0 01.75-.75z"/>
           </svg>
         </button>
         <!-- Minimize -->
-        <button class="treepad-header-minimize" :title="t('treepad.minimize')" @click="minimized = true">
+        <button
+          type="button"
+          class="treepad-header-minimize"
+          :title="t('treepad.minimize')"
+          :aria-label="t('treepad.minimize')"
+          @click="minimized = true"
+        >
           <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
             <path d="M2 8.75a.75.75 0 01.75-.75h10.5a.75.75 0 010 1.5H2.75a.75.75 0 01-.75-.75z"/>
           </svg>
         </button>
         <!-- Close -->
-        <button class="treepad-header-close" @click="emit('close')">
+        <button
+          type="button"
+          class="treepad-header-close"
+          :aria-label="t('treepad.close')"
+          @click="emit('close')"
+        >
           <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
             <path d="M3.72 3.72a.75.75 0 011.06 0L8 6.94l3.22-3.22a.749.749 0 111.06 1.06L9.06 8l3.22 3.22a.749.749 0 11-1.06 1.06L8 9.06l-3.22 3.22a.749.749 0 11-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 010-1.06z" />
           </svg>
         </button>
       </div>
     </div>
-
-    <!-- Disclaimer -->
-    <div class="treepad-disclaimer">{{ t('treepad.disclaimer') }}</div>
 
     <!-- Messages -->
     <div ref="messagesEl" class="treepad-messages">
@@ -381,6 +752,14 @@ function onKeydown(e: KeyboardEvent) {
       </template>
       <template v-for="(msg, i) in messages" :key="i">
         <div class="treepad-bubble" :class="msg.role">
+          <div v-if="msg.attachedFiles?.length" class="treepad-bubble-files" :class="msg.role">
+            <div v-for="file in msg.attachedFiles" :key="file.path" class="treepad-bubble-file">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                <path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0113.25 16h-9.5A1.75 1.75 0 012 14.25V1.75z" />
+              </svg>
+              <span class="treepad-bubble-file-name" :title="file.path">{{ file.name }}</span>
+            </div>
+          </div>
           <div v-if="msg.role === 'assistant'" class="treepad-md" v-html="renderMarkdown(msg.content)" />
           <div v-else class="treepad-bubble-text">{{ msg.content }}</div>
         </div>
@@ -397,27 +776,79 @@ function onKeydown(e: KeyboardEvent) {
 
     <!-- Input area -->
     <div class="treepad-input-area">
-      <div v-if="fileAttached && fileName" class="treepad-file-chip">
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-          <path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0113.25 16h-9.5A1.75 1.75 0 012 14.25V1.75z" />
-        </svg>
-        <span class="treepad-file-name">{{ fileName }}</span>
-        <button class="treepad-file-remove" :title="t('treepad.removeFile')" @click="fileAttached = false">
-          <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor">
-            <path d="M3.72 3.72a.75.75 0 011.06 0L8 6.94l3.22-3.22a.749.749 0 111.06 1.06L9.06 8l3.22 3.22a.749.749 0 11-1.06 1.06L8 9.06l-3.22 3.22a.749.749 0 11-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 010-1.06z" />
+      <!-- Attached file chips -->
+      <div v-if="attachedFiles.length" class="treepad-chips">
+        <div v-for="file in attachedFiles" :key="file.path" class="treepad-file-chip">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0113.25 16h-9.5A1.75 1.75 0 012 14.25V1.75z" />
           </svg>
-        </button>
+          <span class="treepad-file-name" :title="file.path">{{ file.name }}</span>
+          <button
+            type="button"
+            class="treepad-file-remove"
+            :title="t('treepad.removeFile')"
+            :aria-label="t('treepad.removeFile')"
+            @mousedown.prevent
+            @click="removeFile(file.path)"
+          >
+            <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M3.72 3.72a.75.75 0 011.06 0L8 6.94l3.22-3.22a.749.749 0 111.06 1.06L9.06 8l3.22 3.22a.749.749 0 11-1.06 1.06L8 9.06l-3.22 3.22a.749.749 0 11-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 010-1.06z" />
+            </svg>
+          </button>
+        </div>
       </div>
+
       <div class="treepad-input-row">
-        <textarea
-          ref="inputEl"
-          v-model="input"
-          class="treepad-input"
-          :placeholder="t('treepad.placeholder')"
-          rows="1"
-          @keydown="onKeydown"
-        />
-        <button class="treepad-send" :disabled="!input.trim() || loading" @click="send">
+        <div class="treepad-input-stack">
+          <div
+            v-if="mentionOpen"
+            ref="mentionPanelEl"
+            class="treepad-mention-panel"
+            role="listbox"
+            :aria-label="t('treepad.searchFiles')"
+          >
+            <div v-if="mentionFiles.length === 0" class="treepad-mention-empty">
+              {{ t('treepad.noResults') }}
+            </div>
+            <button
+              v-for="(node, index) in mentionFiles"
+              :key="node.path"
+              type="button"
+              class="treepad-mention-item"
+              :class="{ active: index === mentionActiveIndex }"
+              @mousedown.prevent
+              @click="selectMentionFile(node.path, node.name)"
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" class="treepad-mention-icon">
+                <path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0113.25 16h-9.5A1.75 1.75 0 012 14.25V1.75z" />
+              </svg>
+              <span class="treepad-mention-meta">
+                <span class="treepad-mention-name">{{ node.name }}</span>
+                <span class="treepad-mention-path">{{ node.path }}</span>
+              </span>
+            </button>
+          </div>
+
+          <textarea
+            ref="inputEl"
+            v-model="input"
+            class="treepad-input"
+            :placeholder="t('treepad.placeholder')"
+            rows="2"
+            :aria-expanded="mentionOpen"
+            @input="syncMentionState"
+            @click="syncMentionState"
+            @keyup="onInputKeyup"
+            @keydown="onKeydown"
+          />
+        </div>
+        <button
+          type="button"
+          class="treepad-send"
+          :aria-label="t('treepad.send')"
+          :disabled="!input.trim() || loading"
+          @click="send"
+        >
           <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
             <path d="M.989 8 .064 2.68a1.342 1.342 0 011.85-1.462l13.402 5.744a1.13 1.13 0 010 2.076L1.913 14.782a1.343 1.343 0 01-1.85-1.463L.99 8zm1.023.258l-.863 4.803L13.89 8 1.149 2.94l.863 4.802L8.75 8 2.012 8.258z" />
           </svg>

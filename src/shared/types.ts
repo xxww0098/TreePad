@@ -35,6 +35,42 @@ export interface RepoInfo {
   path: string
 }
 
+export type GitHubAuthMode = 'none' | 'token' | 'cookie'
+export type GitHubTokenSource = 'manual' | 'oauth-device'
+
+export interface GitHubRateLimitInfo {
+  limit: number | null
+  remaining: number | null
+  used: number | null
+  resetAt: number | null
+  resource: string | null
+  authMode: GitHubAuthMode
+  detectedAsUnauthenticated: boolean
+}
+
+export interface GitHubAuthStatus {
+  authMode: GitHubAuthMode
+  tokenSource: GitHubTokenSource | null
+  hasToken: boolean
+  rateLimit: GitHubRateLimitInfo | null
+  oauthClientId: string
+}
+
+export interface GitHubDeviceCodeInfo {
+  deviceCode: string
+  userCode: string
+  verificationUri: string
+  expiresIn: number
+  interval: number
+}
+
+export interface GitHubDeviceFlowPollResult {
+  status: 'pending' | 'slow_down' | 'success' | 'error'
+  accessToken?: string
+  error?: string
+  interval?: number
+}
+
 /** Message types between content script and service worker */
 export type MessageType =
   | { type: 'FETCH_TREE'; owner: string; repo: string; branch: string }
@@ -42,6 +78,10 @@ export type MessageType =
   | { type: 'FETCH_RAW'; owner: string; repo: string; branch: string; path: string }
   | { type: 'SET_TOKEN'; token: string }
   | { type: 'GET_TOKEN' }
+  | { type: 'GET_GITHUB_AUTH_STATUS'; force?: boolean }
+  | { type: 'SET_GITHUB_OAUTH_CLIENT_ID'; clientId: string }
+  | { type: 'START_GITHUB_DEVICE_FLOW'; clientId?: string }
+  | { type: 'POLL_GITHUB_DEVICE_FLOW'; clientId?: string; deviceCode: string }
   | { type: 'SET_AI_KEY'; key: string }
   | { type: 'GET_AI_KEY' }
   | { type: 'AI_CHAT'; baseUrl: string; model: string; messages: AIChatMessage[] }
@@ -55,6 +95,11 @@ export interface AIChatMessage {
 export interface TreeCacheEntry {
   sha: string
   nodes: FlatNode[]
+  timestamp: number
+}
+
+export interface BranchCacheEntry {
+  branch: string
   timestamp: number
 }
 

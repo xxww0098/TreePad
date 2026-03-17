@@ -30,8 +30,11 @@
 
 ### 🔑 GitHub 认证
 
-- 设置 Personal Access Token（public_repo 权限）将 API 限制从 60 提升至 5,000 次/小时
-- 自动回退到 GitHub 会话 Cookie —— 登录用户无需配置
+- 同一个加密输入框支持细粒度 PAT、经典 PAT、以及 GitHub OAuth access token
+- 新增 GitHub OAuth Device Flow 登录方式，更适合浏览器扩展场景；只需要 OAuth App Client ID，无需在扩展里内置 client secret
+- 自动回退到 GitHub 会话 Cookie —— 当 GitHub 接受当前浏览器会话用于 API 调用时可零配置工作
+- 设置页会直接显示当前认证方式和剩余 GitHub API 额度
+- 默认分支会缓存，后台会对相同 GitHub 请求做去重，减少不必要的 API 消耗
 - Token 使用 AES-GCM 加密存储，不以明文保存
 
 ### ⚙️ 设置
@@ -106,6 +109,16 @@ src/
 1. `bun install`
 2. `bun run build`
 3. 打开 `chrome://extensions` → **加载已解压的扩展程序** → 选择 `dist/` 文件夹
+
+## 发布版 OAuth 配置
+
+1. 将 `.env.example` 复制为 `.env.production.local`
+2. 填入 `VITE_GITHUB_OAUTH_CLIENT_ID`
+3. 填入 `VITE_GITHUB_OAUTH_APP_HOMEPAGE` 和 `TREEPAD_EXTENSION_ID`
+4. 运行 `./build.sh` 或 `./build.sh --zip`
+5. 打开发布产物目录中的 `GITHUB_OAUTH_SETUP.md`
+
+详细说明见：[docs/GITHUB_OAUTH.md](./docs/GITHUB_OAUTH.md)
 
 ---
 

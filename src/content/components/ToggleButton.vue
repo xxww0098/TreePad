@@ -8,10 +8,12 @@ const { t } = useI18n()
 
 <template>
   <button
+    type="button"
     class="toggle-btn"
     :class="[settings.dockSide, { 'panel-visible': settings.panelVisible }]"
     :style="settings.panelVisible && settings.dockSide === 'left' ? { left: settings.panelWidth + 'px' } : settings.panelVisible && settings.dockSide === 'right' ? { right: settings.panelWidth + 'px' } : {}"
     :title="t('toggle.title')"
+    :aria-label="t('toggle.title')"
     @click="settings.toggleVisible()"
   >
     <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">

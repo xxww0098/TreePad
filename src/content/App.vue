@@ -29,6 +29,7 @@ const searchBarRef = ref<InstanceType<typeof SearchBar> | null>(null)
 const fileTreeRef = ref<InstanceType<typeof FileTree> | null>(null)
 const settingsOpen = ref(false)
 const chatOpen = ref(false)
+const chatRevealSignal = ref(0)
 
 const displayNodes = computed(() => {
   if (isSearching.value) {
@@ -72,6 +73,15 @@ function toggleSettings() {
   settingsOpen.value = !settingsOpen.value
 }
 
+function handleTreePadButtonClick() {
+  if (!chatOpen.value) {
+    chatOpen.value = true
+    chatRevealSignal.value += 1
+    return
+  }
+  chatRevealSignal.value += 1
+}
+
 useKeyboard(
   displayNodes,
   computed(() => fileTreeRef.value?.containerRef ?? null),
@@ -106,8 +116,12 @@ const showPanel = computed(() => !!repoInfo.value)
         </template>
       </TreePanel>
       <ToggleButton />
-      <TreePadButton @click="chatOpen = true" />
-      <TreePadDialog v-if="chatOpen" @close="chatOpen = false" />
+      <TreePadButton @click="handleTreePadButtonClick" />
+      <TreePadDialog
+        v-if="chatOpen"
+        :reveal-signal="chatRevealSignal"
+        @close="chatOpen = false"
+      />
     </template>
   </div>
 </template>

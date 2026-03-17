@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Repo Tree",
-  "version": "0.1.0",
-  "description": "High-performance file tree for GitHub",
+  "name": "TreePad",
+  "version": "0.2.0",
+  "description": "High-performance GitHub file tree with AI chat",
   "permissions": [
     "storage",
     "cookies"

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { onUnmounted, ref } from 'vue'
 import { useTreeStore } from '../stores/tree'
 import { useSettingsStore } from '../stores/settings'
 import { useI18n } from '../composables/useI18n'
@@ -15,6 +16,9 @@ const emit = defineEmits<{
 
 const tree = useTreeStore()
 const settings = useSettingsStore()
+const collapseActive = ref(false)
+
+let collapseTimer: number | null = null
 
 function navigateToRepo() {
   const repo = tree.currentRepo
@@ -32,29 +36,63 @@ function navigateToRepo() {
   a.click()
   a.remove()
 }
+
+function clearCollapseTimer() {
+  if (collapseTimer !== null) {
+    window.clearTimeout(collapseTimer)
+    collapseTimer = null
+  }
+}
+
+function handleCollapseAll() {
+  tree.collapseAll()
+  collapseActive.value = true
+  clearCollapseTimer()
+  collapseTimer = window.setTimeout(() => {
+    collapseActive.value = false
+    collapseTimer = null
+  }, 260)
+}
+
+onUnmounted(() => {
+  clearCollapseTimer()
+})
 </script>
 
 <template>
   <div class="tree-header">
-    <span class="tree-header-title tree-header-title-link" @click="navigateToRepo">
+    <button
+      type="button"
+      class="tree-header-title tree-header-title-link"
+      :aria-label="t('header.openRepo')"
+      @click="navigateToRepo"
+    >
       {{ tree.currentRepo ? `${tree.currentRepo.owner}/${tree.currentRepo.repo}` : t('header.fallback') }}
-    </span>
+    </button>
     <div class="tree-header-actions">
       <button
-        class="tree-header-btn"
+        type="button"
+        class="tree-header-btn collapse-btn"
+        :class="{ 'collapse-active': collapseActive }"
         :title="t('header.collapse')"
-        @click="tree.collapseAll()"
+        :aria-label="t('header.collapse')"
+        @click="handleCollapseAll"
       >
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M3 4l5 5 5-5" />
-          <path d="M3 9l5 5 5-5" />
-          <line x1="1" y1="2" x2="15" y2="2" />
+        <svg class="collapse-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path class="collapse-icon-rail" d="M4 3.5v9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+          <path class="collapse-icon-branch collapse-icon-branch-top" d="M4 4.25h6.25" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+          <path class="collapse-icon-branch collapse-icon-branch-mid" d="M4 8h4.1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+          <path class="collapse-icon-branch collapse-icon-branch-bottom" d="M4 11.75h5.1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+          <path class="collapse-icon-arrow-line" d="M12.4 8H8.7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+          <path class="collapse-icon-arrow-head" d="M10.35 6.35 8.35 8l2 1.65" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
       </button>
       <button
+        type="button"
         class="tree-header-btn"
         :class="{ 'gear-active': settingsOpen }"
         :title="t('header.settings')"
+        :aria-label="t('header.settings')"
         @click="emit('toggle-settings')"
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -63,8 +101,10 @@ function navigateToRepo() {
         </svg>
       </button>
       <button
+        type="button"
         class="tree-header-btn"
         :title="t('header.close')"
+        :aria-label="t('header.close')"
         @click="settings.toggleVisible()"
       >
         <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">

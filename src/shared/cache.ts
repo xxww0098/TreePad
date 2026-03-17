@@ -1,9 +1,15 @@
 import { get, set, del } from 'idb-keyval'
 import { CACHE_PREFIX, CACHE_MAX_AGE } from './constants'
-import type { TreeCacheEntry, FlatNode } from './types'
+import type { TreeCacheEntry, FlatNode, BranchCacheEntry } from './types'
+
+const DEFAULT_BRANCH_CACHE_MAX_AGE = 1000 * 60 * 60 * 24 * 7 // 7 days
 
 function cacheKey(owner: string, repo: string, branch: string): string {
   return `${CACHE_PREFIX}${owner}/${repo}:${branch}`
+}
+
+function defaultBranchCacheKey(owner: string, repo: string): string {
+  return `${CACHE_PREFIX}default-branch:${owner}/${repo}`
 }
 
 export async function getCachedTree(
@@ -53,4 +59,28 @@ export async function setExpandedIds(
   ids: number[],
 ): Promise<void> {
   await set(`${CACHE_PREFIX}expanded:${owner}/${repo}`, ids)
+}
+
+export async function getCachedDefaultBranch(
+  owner: string,
+  repo: string,
+): Promise<string | null> {
+  const entry = await get<BranchCacheEntry>(defaultBranchCacheKey(owner, repo))
+  if (!entry) return null
+  if (Date.now() - entry.timestamp > DEFAULT_BRANCH_CACHE_MAX_AGE) {
+    await del(defaultBranchCacheKey(owner, repo))
+    return null
+  }
+  return entry.branch
+}
+
+export async function setCachedDefaultBranch(
+  owner: string,
+  repo: string,
+  branch: string,
+): Promise<void> {
+  await set(defaultBranchCacheKey(owner, repo), {
+    branch,
+    timestamp: Date.now(),
+  } satisfies BranchCacheEntry)
 }
