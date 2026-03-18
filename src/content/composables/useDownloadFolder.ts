@@ -58,6 +58,31 @@ export function useDownloadFolder() {
     return base64ToUint8Array(res.base64)
   }
 
+  function toArrayBuffer(data: Uint8Array): ArrayBuffer {
+    // Create a new ArrayBuffer and copy the data
+    const result = new ArrayBuffer(data.byteLength)
+    new Uint8Array(result).set(data)
+    return result
+  }
+
+  function triggerDownload(data: ArrayBuffer, fileName: string, mimeType = 'application/octet-stream') {
+    const blob = new Blob([data], { type: mimeType })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = fileName
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+  }
+
+  function clearProgressAfterDelay() {
+    setTimeout(() => {
+      progress.value = null
+    }, 2000)
+  }
+
   async function download(
     allNodes: FlatNode[],
     dirNode: FlatNode,
@@ -65,9 +90,7 @@ export function useDownloadFolder() {
   ) {
     const files = collectSubtreeFiles(allNodes, dirNode)
     const folderName = dirNode.name
-    const zipName = dirNode.depth === 0
-      ? `${repoInfo.repo}.zip`
-      : `${repoInfo.repo}-${folderName}.zip`
+    const zipName = `${repoInfo.repo}-${folderName}.zip`
 
     if (files.length === 0) return
 
@@ -130,7 +153,7 @@ export function useDownloadFolder() {
 
     if (signal.aborted) {
       progress.value = { ...progress.value!, status: 'cancelled' }
-      setTimeout(() => { progress.value = null }, 2000)
+      clearProgressAfterDelay()
       return
     }
 
@@ -138,21 +161,58 @@ export function useDownloadFolder() {
     if (progress.value) progress.value.status = 'zipping'
     const zipped = zipSync(zipData)
 
-    // Trigger download
-    const blob = new Blob([zipped.buffer as ArrayBuffer], { type: 'application/zip' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = zipName
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
-    URL.revokeObjectURL(url)
+    triggerDownload(toArrayBuffer(zipped), zipName, 'application/zip')
 
     if (progress.value) {
       progress.value.status = errors.length > 0 ? 'error' : 'done'
     }
-    setTimeout(() => { progress.value = null }, 2000)
+    clearProgressAfterDelay()
+  }
+
+  async function downloadFile(
+    fileNode: FlatNode,
+    repoInfo: RepoInfo,
+  ) {
+    abortController = new AbortController()
+    const { signal } = abortController
+
+    progress.value = {
+      folderName: fileNode.name,
+      total: 1,
+      done: 0,
+      status: 'downloading',
+      errorCount: 0,
+    }
+
+    try {
+      const data = await fetchFileViaBackground(
+        repoInfo.owner,
+        repoInfo.repo,
+        repoInfo.branch,
+        fileNode.path,
+      )
+
+      if (signal.aborted) {
+        progress.value = { ...progress.value!, status: 'cancelled' }
+        clearProgressAfterDelay()
+        return
+      }
+
+      if (progress.value) progress.value.done = 1
+      triggerDownload(toArrayBuffer(data), fileNode.name)
+
+      if (progress.value) progress.value.status = 'done'
+    } catch {
+      if (signal.aborted) {
+        progress.value = { ...progress.value!, status: 'cancelled' }
+      } else if (progress.value) {
+        progress.value.done = 1
+        progress.value.errorCount = 1
+        progress.value.status = 'error'
+      }
+    }
+
+    clearProgressAfterDelay()
   }
 
   function cancel() {
@@ -162,6 +222,7 @@ export function useDownloadFolder() {
   return {
     progress: readonly(progress),
     download,
+    downloadFile,
     cancel,
   }
 }

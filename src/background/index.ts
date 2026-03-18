@@ -23,16 +23,21 @@ import type {
   GitHubDeviceCodeInfo,
   GitHubDeviceFlowPollResult,
   GitHubRateLimitInfo,
-  GitHubTokenSource,
 } from '../shared/types'
+import {
+  getStoredToken,
+  getStoredTokenSource,
+  setStoredToken,
+  getStoredAiKey,
+  setStoredAiKey,
+  getStoredGitHubOAuthClientId,
+  setStoredGitHubOAuthClientId,
+  runPostInstallMigration,
+  verifyCredentialHealth,
+} from './credential-store'
 
-// ── Encrypted token storage ─────────────────────────────────
+// ── Constants ───────────────────────────────────────────────
 
-const TOKEN_KEY = 'github_token_enc'
-const TOKEN_SOURCE_KEY = 'github_token_source'
-const GITHUB_OAUTH_CLIENT_ID_KEY = 'github_oauth_client_id'
-const AI_KEY_KEY = 'ai_api_key_enc'
-const DEFAULT_GITHUB_OAUTH_CLIENT_ID = import.meta.env.VITE_GITHUB_OAUTH_CLIENT_ID ?? ''
 const DEVICE_FLOW_GRANT_TYPE = 'urn:ietf:params:oauth:grant-type:device_code'
 const DEVICE_CODE_URL = 'https://github.com/login/device/code'
 const DEVICE_TOKEN_URL = 'https://github.com/login/oauth/access_token'
@@ -41,85 +46,21 @@ const RATE_LIMIT_CACHE_TTL_MS = 15_000
 const inflightRequests = new Map<string, Promise<unknown>>()
 const rateLimitCache = new Map<string, { info: GitHubRateLimitInfo; fetchedAt: number }>()
 
-async function getDerivedKey(): Promise<CryptoKey> {
-  const raw = new TextEncoder().encode(chrome.runtime.id)
-  const base = await crypto.subtle.importKey('raw', raw, 'PBKDF2', false, ['deriveKey'])
-  return crypto.subtle.deriveKey(
-    { name: 'PBKDF2', salt: new TextEncoder().encode('treepad-salt'), iterations: 100000, hash: 'SHA-256' },
-    base,
-    { name: 'AES-GCM', length: 256 },
-    false,
-    ['encrypt', 'decrypt'],
-  )
-}
+// ── Post-install migration ──────────────────────────────────
 
-async function encryptToken(token: string): Promise<string> {
-  const key = await getDerivedKey()
-  const iv = crypto.getRandomValues(new Uint8Array(12))
-  const enc = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(token))
-  const buf = new Uint8Array(iv.length + new Uint8Array(enc).length)
-  buf.set(iv)
-  buf.set(new Uint8Array(enc), iv.length)
-  return btoa(String.fromCharCode(...buf))
-}
-
-async function decryptToken(stored: string): Promise<string> {
-  const key = await getDerivedKey()
-  const buf = Uint8Array.from(atob(stored), (c) => c.charCodeAt(0))
-  const iv = buf.slice(0, 12)
-  const data = buf.slice(12)
-  const dec = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, data)
-  return new TextDecoder().decode(dec)
-}
-
-async function getStoredToken(): Promise<string | undefined> {
-  const data = await chrome.storage.local.get(TOKEN_KEY)
-  const val = data[TOKEN_KEY]
-  if (typeof val !== 'string') return undefined
-  try {
-    return await decryptToken(val)
-  } catch {
-    return undefined
+chrome.runtime.onInstalled.addListener(async (details) => {
+  if (details.reason === 'install' || details.reason === 'update') {
+    console.info(`[TreePad] Extension ${details.reason} — running credential migration`)
+    try {
+      await runPostInstallMigration()
+      await verifyCredentialHealth()
+    } catch (err) {
+      console.warn('[TreePad] Post-install migration error:', err)
+    }
   }
-}
+})
 
-async function getStoredTokenSource(): Promise<GitHubTokenSource | undefined> {
-  const data = await chrome.storage.local.get(TOKEN_SOURCE_KEY)
-  const source = data[TOKEN_SOURCE_KEY]
-  if (source === 'manual' || source === 'oauth-device') return source
-  return undefined
-}
-
-async function setStoredToken(
-  token: string,
-  source: GitHubTokenSource = 'manual',
-): Promise<void> {
-  if (!token.trim()) {
-    await chrome.storage.local.remove([TOKEN_KEY, TOKEN_SOURCE_KEY])
-    return
-  }
-  const encrypted = await encryptToken(token.trim())
-  await chrome.storage.local.set({
-    [TOKEN_KEY]: encrypted,
-    [TOKEN_SOURCE_KEY]: source,
-  })
-}
-
-async function getStoredGitHubOAuthClientId(): Promise<string> {
-  const data = await chrome.storage.local.get(GITHUB_OAUTH_CLIENT_ID_KEY)
-  const stored = data[GITHUB_OAUTH_CLIENT_ID_KEY]
-  if (typeof stored === 'string' && stored.trim()) return stored.trim()
-  return DEFAULT_GITHUB_OAUTH_CLIENT_ID.trim()
-}
-
-async function setStoredGitHubOAuthClientId(clientId: string): Promise<void> {
-  const trimmed = clientId.trim()
-  if (!trimmed) {
-    await chrome.storage.local.remove(GITHUB_OAUTH_CLIENT_ID_KEY)
-    return
-  }
-  await chrome.storage.local.set({ [GITHUB_OAUTH_CLIENT_ID_KEY]: trimmed })
-}
+// ── Rate limit cache ────────────────────────────────────────
 
 function getAuthCacheKey(auth: AuthInfo): string {
   if (auth.token) return `token:${auth.token.slice(-12)}`
@@ -197,17 +138,19 @@ async function rememberRateLimitFromError(auth: AuthInfo, err: unknown) {
 // ── GitHub session cookie ───────────────────────────────────
 
 async function hasGitHubSession(): Promise<boolean> {
+  const relevantCookies = [
+    'user_session',
+    '__Host-user_session_same_site',
+    'logged_in',
+    '_gh_sess',
+  ]
   try {
-    const cookies = await chrome.cookies.getAll({ domain: '.github.com' })
-    if (cookies.length === 0) return false
-
-    const relevant = cookies.filter((c) =>
-      c.name === 'user_session' ||
-      c.name === '__Host-user_session_same_site' ||
-      c.name === 'logged_in' ||
-      c.name === '_gh_sess',
+    const results = await Promise.all(
+      relevantCookies.map((name) =>
+        chrome.cookies.get({ url: 'https://github.com/', name }),
+      ),
     )
-    return relevant.some((c) => !!c.value)
+    return results.some((c) => !!c?.value)
   } catch {
     return false
   }
@@ -269,6 +212,8 @@ async function handleSetToken(token: string): Promise<void> {
   rememberRateLimit({ token: trimmed, tokenSource: 'manual' }, rateLimit)
   await setStoredToken(trimmed, 'manual')
 }
+
+// ── OAuth Device Flow ───────────────────────────────────────
 
 async function resolveOAuthClientId(clientId?: string): Promise<string> {
   const trimmed = clientId?.trim()
@@ -416,6 +361,41 @@ async function withGitHubAuth<T>(
   }
 }
 
+// ── AI key handlers ─────────────────────────────────────────
+
+async function handleSetAiKey(key: string): Promise<void> {
+  await setStoredAiKey(key)
+}
+
+// ── AI chat ─────────────────────────────────────────────────
+
+async function handleAiChat(
+  baseUrl: string,
+  model: string,
+  messages: { role: string; content: string }[],
+): Promise<string> {
+  const apiKey = await getStoredAiKey()
+  if (!apiKey) throw new Error('AI API key not configured')
+
+  const url = baseUrl.replace(/\/+$/, '') + '/chat/completions'
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({ model, messages }),
+  })
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    throw new Error(`AI API error ${res.status}: ${text.slice(0, 200)}`)
+  }
+
+  const data = await res.json()
+  return data.choices?.[0]?.message?.content ?? ''
+}
+
 // ── Message handlers ────────────────────────────────────────
 
 chrome.runtime.onMessage.addListener((message: MessageType, _sender, sendResponse) => {
@@ -502,55 +482,6 @@ chrome.runtime.onMessage.addListener((message: MessageType, _sender, sendRespons
   }
 })
 
-// ── AI Key storage ─────────────────────────────────────────
-
-async function getStoredAiKey(): Promise<string | undefined> {
-  const data = await chrome.storage.local.get(AI_KEY_KEY)
-  const val = data[AI_KEY_KEY]
-  if (typeof val !== 'string') return undefined
-  try {
-    return await decryptToken(val)
-  } catch {
-    return undefined
-  }
-}
-
-async function handleSetAiKey(key: string): Promise<void> {
-  if (!key.trim()) {
-    await chrome.storage.local.remove(AI_KEY_KEY)
-    return
-  }
-  const encrypted = await encryptToken(key.trim())
-  await chrome.storage.local.set({ [AI_KEY_KEY]: encrypted })
-}
-
-async function handleAiChat(
-  baseUrl: string,
-  model: string,
-  messages: { role: string; content: string }[],
-): Promise<string> {
-  const apiKey = await getStoredAiKey()
-  if (!apiKey) throw new Error('AI API key not configured')
-
-  const url = baseUrl.replace(/\/+$/, '') + '/chat/completions'
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({ model, messages }),
-  })
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => '')
-    throw new Error(`AI API error ${res.status}: ${text.slice(0, 200)}`)
-  }
-
-  const data = await res.json()
-  return data.choices?.[0]?.message?.content ?? ''
-}
-
 // ── Streaming AI chat via ports ─────────────────────────────
 
 chrome.runtime.onConnect.addListener((port) => {
@@ -604,7 +535,12 @@ chrome.runtime.onConnect.addListener((port) => {
             const parsed = JSON.parse(data)
             const delta = parsed.choices?.[0]?.delta?.content
             if (delta) {
-              port.postMessage({ type: 'chunk', content: delta })
+              try {
+                port.postMessage({ type: 'chunk', content: delta })
+              } catch {
+                // Port disconnected — stop streaming
+                return
+              }
             }
           } catch {
             // skip malformed JSON chunks
@@ -614,7 +550,11 @@ chrome.runtime.onConnect.addListener((port) => {
 
       port.postMessage({ type: 'done' })
     } catch (err: any) {
-      port.postMessage({ type: 'error', error: err.message || 'Stream failed' })
+      try {
+        port.postMessage({ type: 'error', error: err.message || 'Stream failed' })
+      } catch {
+        // Port already disconnected
+      }
     }
   })
 })

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "TreePad",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "High-performance GitHub file tree with AI chat",
   "permissions": [
     "storage",
