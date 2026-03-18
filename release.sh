@@ -53,7 +53,7 @@ fi
 [[ -d dist ]] || die "dist/ not found after build"
 
 # ─── package ────────────────────────────────────────────────────────────────
-ZIP="treepad-$VERSION.zip"
+ZIP="TreePad-$VERSION.zip"
 info "packaging → $ZIP"
 (cd dist && zip -qr "../$ZIP" .)
 

@@ -109,6 +109,7 @@ Content script ↔ background communicate via `chrome.runtime.sendMessage` (one-
 1. `bun install`
 2. `bun run build`
 3. Open `chrome://extensions` → **Load unpacked** → select the `dist/` folder
+4. Keep using the same unpacked folder path for future updates, otherwise Chrome may assign a new extension ID and local storage such as GitHub tokens will not carry over
 
 ## Release OAuth Setup
 
@@ -116,7 +117,8 @@ Content script ↔ background communicate via `chrome.runtime.sendMessage` (one-
 2. Fill `VITE_GITHUB_OAUTH_CLIENT_ID` with your GitHub OAuth App client ID
 3. Fill `VITE_GITHUB_OAUTH_APP_HOMEPAGE` and `TREEPAD_EXTENSION_ID`
 4. Run `./build.sh` or `./build.sh --zip`
-5. Open the generated `GITHUB_OAUTH_SETUP.md` in the release output folder
+5. Load unpacked from `TreePad-unpacked/` for installs and updates so the extension ID stays stable
+6. Open the generated `GITHUB_OAUTH_SETUP.md` in the release output folder
 
 Detailed guide: [docs/GITHUB_OAUTH.md](./docs/GITHUB_OAUTH.md)
 

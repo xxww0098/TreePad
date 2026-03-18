@@ -20,9 +20,9 @@ import type { FlatNode } from '../shared/types'
 
 const store = useTreeStore()
 const { visibleNodes, repoInfo } = useTree()
-const { query, results, isSearching } = useSearch()
+const { query, results, isSearching, clear } = useSearch()
 const { isDark } = useTheme()
-const { progress, download, cancel } = useDownloadFolder()
+const { progress, download, downloadFile, cancel } = useDownloadFolder()
 useStarCelebration()
 
 const searchBarRef = ref<InstanceType<typeof SearchBar> | null>(null)
@@ -37,9 +37,13 @@ const displayNodes = computed(() => {
   }
   return visibleNodes.value
 })
+const canDownloadAll = computed(() => !!repoInfo.value && store.nodes.length > 0)
 
 function handleNodeClick(node: FlatNode) {
   store.selectPath(node.path)
+  if (isSearching.value && node.isDir) {
+    clear()
+  }
   if (!node.isDir) {
     navigateToFile(node.path)
   }
@@ -47,7 +51,25 @@ function handleNodeClick(node: FlatNode) {
 
 function handleDownload(node: FlatNode) {
   if (!repoInfo.value) return
-  download(store.nodes, node, repoInfo.value)
+  if (node.isDir) {
+    download(store.nodes, node, repoInfo.value)
+    return
+  }
+  downloadFile(node, repoInfo.value)
+}
+
+function handleDownloadAll() {
+  if (!repoInfo.value || store.nodes.length === 0) return
+  download(store.nodes, {
+    idx: -1,
+    name: repoInfo.value.repo,
+    path: '',
+    depth: 0,
+    isDir: true,
+    parentIdx: -1,
+    childCount: store.nodes.length,
+    subtreeEnd: store.nodes.length,
+  }, repoInfo.value)
 }
 
 function navigateToFile(path: string) {
@@ -96,7 +118,12 @@ const showPanel = computed(() => !!repoInfo.value)
   <div :class="{ dark: isDark }">
     <template v-if="showPanel">
       <TreePanel>
-        <TreeHeader :settings-open="settingsOpen" @toggle-settings="toggleSettings" />
+        <TreeHeader
+          :settings-open="settingsOpen"
+          :can-download-all="canDownloadAll"
+          @toggle-settings="toggleSettings"
+          @download-all="handleDownloadAll"
+        />
         <template v-if="settingsOpen">
           <SettingsView />
         </template>
@@ -105,6 +132,7 @@ const showPanel = computed(() => !!repoInfo.value)
           <FileTree
             ref="fileTreeRef"
             :visible-nodes="displayNodes"
+            :search-mode="isSearching"
             @node-click="handleNodeClick"
             @download="handleDownload"
           />

@@ -6,13 +6,14 @@ import type { FlatNode } from '../../shared/types'
 export function useVirtual(
   containerRef: Ref<HTMLElement | null>,
   getItems: () => FlatNode[],
+  getEstimateSize: () => number = () => NODE_HEIGHT,
 ) {
   const virtualizer = useVirtualizer({
     get count() {
       return getItems().length
     },
     getScrollElement: () => containerRef.value,
-    estimateSize: () => NODE_HEIGHT,
+    estimateSize: () => getEstimateSize(),
     overscan: 20,
   })
 

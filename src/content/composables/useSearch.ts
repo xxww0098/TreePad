@@ -22,15 +22,14 @@ export function useSearch() {
   watch(
     () => store.nodes,
     (nodes) => {
-      // Only index files (not directories) for search
-      const files = nodes.filter((n) => !n.isDir)
-      fuse = new Fuse(files, {
+      fuse = new Fuse(nodes, {
         keys: ['name', 'path'],
         threshold: SEARCH_FUSE_THRESHOLD,
         includeMatches: true,
         ignoreLocation: true,
       })
     },
+    { immediate: true },
   )
 
   const doSearch = useDebounceFn((q: string) => {
@@ -40,10 +39,13 @@ export function useSearch() {
     }
 
     if (q.length <= 2) {
-      // Simple prefix filter for short queries
       const lower = q.toLowerCase()
       results.value = store.nodes
-        .filter((n) => !n.isDir && n.name.toLowerCase().startsWith(lower))
+        .filter((n) => {
+          const name = n.name.toLowerCase()
+          const path = n.path.toLowerCase()
+          return name.includes(lower) || path.includes(lower)
+        })
         .slice(0, 50)
         .map((node) => ({ node }))
     } else if (fuse) {

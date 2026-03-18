@@ -310,11 +310,8 @@ export async function fetchRawFile(
   if (!res.ok) await throwApiError(res, 'fetch file', auth)
   const buffer = await res.arrayBuffer()
   const bytes = new Uint8Array(buffer)
-  let binary = ''
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i])
-  }
-  return btoa(binary)
+  // Use spread + apply to avoid O(n²) string concatenation
+  return btoa(String.fromCharCode(...bytes))
 }
 
 export async function fetchDefaultBranch(

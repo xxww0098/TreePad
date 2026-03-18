@@ -109,6 +109,7 @@ src/
 1. `bun install`
 2. `bun run build`
 3. 打开 `chrome://extensions` → **加载已解压的扩展程序** → 选择 `dist/` 文件夹
+4. 后续更新时请保持使用同一个已加载目录，否则 Chrome 可能会分配新的扩展 ID，本地存储里的 GitHub Token 等数据也不会继承
 
 ## 发布版 OAuth 配置
 
@@ -116,7 +117,8 @@ src/
 2. 填入 `VITE_GITHUB_OAUTH_CLIENT_ID`
 3. 填入 `VITE_GITHUB_OAUTH_APP_HOMEPAGE` 和 `TREEPAD_EXTENSION_ID`
 4. 运行 `./build.sh` 或 `./build.sh --zip`
-5. 打开发布产物目录中的 `GITHUB_OAUTH_SETUP.md`
+5. 安装和更新时请优先加载 `TreePad-unpacked/`，这样扩展 ID 会保持稳定
+6. 打开发布产物目录中的 `GITHUB_OAUTH_SETUP.md`
 
 详细说明见：[docs/GITHUB_OAUTH.md](./docs/GITHUB_OAUTH.md)
 

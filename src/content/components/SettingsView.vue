@@ -85,7 +85,7 @@ const githubMetaText = computed(() => {
   return ''
 })
 const githubActionLabel = computed(() =>
-  hasGitHubAuth.value
+  authStatusClass.value === 'on' && hasGitHubAuth.value
     ? t.value('settings.github.manageConnection')
     : t.value('settings.github.openTokenPage'),
 )
@@ -270,14 +270,20 @@ function openOAuthPage() {
   window.open(oauthFlow.value.verificationUri, '_blank', 'noopener,noreferrer')
 }
 
+function extractGitHubToken(text: string): string {
+  const trimmed = text.trim()
+  const match = trimmed.match(/(github_pat_[A-Za-z0-9_]+|gh[opusr]_[A-Za-z0-9_]+)/)
+  return match?.[0]?.trim() || ''
+}
+
 async function pasteAndSaveToken(): Promise<'saved' | 'missing' | 'error'> {
   try {
-    const text = (await navigator.clipboard.readText()).trim()
-    if (!text || !text.startsWith('gh')) {
+    const token = extractGitHubToken(await navigator.clipboard.readText())
+    if (!token) {
       authError.value = t.value('settings.token.clipboardEmpty')
       return 'missing'
     }
-    await saveTokenValue(text)
+    await saveTokenValue(token)
     return authError.value ? 'error' : 'saved'
   } catch {
     authError.value = t.value('settings.token.clipboardDenied')
@@ -286,12 +292,12 @@ async function pasteAndSaveToken(): Promise<'saved' | 'missing' | 'error'> {
 }
 
 async function startPreferredGitHubAccess() {
+  const result = await pasteAndSaveToken()
+  if (result === 'saved' || result === 'error') return
   if (hasConfiguredOAuthClientId.value) {
     await startOAuthDeviceFlow()
     return
   }
-  const result = await pasteAndSaveToken()
-  if (result === 'saved' || result === 'error') return
   openTokenTemplate()
 }
 

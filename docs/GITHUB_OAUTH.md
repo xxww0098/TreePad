@@ -35,5 +35,6 @@ TREEPAD_EXTENSION_ID=your_chrome_extension_id
 
 1. Add the env vars above.
 2. Run `./build.sh` or `./build.sh --zip`.
-3. Open the generated `TreePad-vX.Y.Z/GITHUB_OAUTH_SETUP.md`.
-4. Confirm the packaged callback URL and client ID match the GitHub OAuth App registration.
+3. Load unpacked from `TreePad-unpacked/` if you update the extension locally. Reusing the same directory helps Chrome keep the same extension ID and storage.
+4. Open the generated `TreePad-vX.Y.Z/GITHUB_OAUTH_SETUP.md`.
+5. Confirm the packaged callback URL and client ID match the GitHub OAuth App registration.

@@ -8,10 +8,12 @@ const { t } = useI18n()
 
 const props = defineProps<{
   settingsOpen: boolean
+  canDownloadAll: boolean
 }>()
 
 const emit = defineEmits<{
   'toggle-settings': []
+  'download-all': []
 }>()
 
 const tree = useTreeStore()
@@ -85,6 +87,19 @@ onUnmounted(() => {
           <path class="collapse-icon-branch collapse-icon-branch-bottom" d="M4 11.75h5.1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
           <path class="collapse-icon-arrow-line" d="M12.4 8H8.7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
           <path class="collapse-icon-arrow-head" d="M10.35 6.35 8.35 8l2 1.65" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        class="tree-header-btn"
+        :title="t('header.downloadAll')"
+        :aria-label="t('header.downloadAll')"
+        :disabled="!props.canDownloadAll"
+        @click="emit('download-all')"
+      >
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+          <path d="M2.75 13.5A1.25 1.25 0 0 1 1.5 12.25V10a.75.75 0 0 1 1.5 0v2.25h10V10a.75.75 0 0 1 1.5 0v2.25a1.25 1.25 0 0 1-1.25 1.25Z" />
+          <path d="M7.25 2a.75.75 0 0 1 1.5 0v6.19l1.72-1.72a.75.75 0 0 1 1.06 1.06L8.53 10.56a.75.75 0 0 1-1.06 0L4.47 7.53a.75.75 0 1 1 1.06-1.06l1.72 1.72Z" />
         </svg>
       </button>
       <button
