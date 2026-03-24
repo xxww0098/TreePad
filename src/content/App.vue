@@ -7,6 +7,8 @@ import { useTheme } from './composables/useTheme'
 import { useDownloadFolder } from './composables/useDownloadFolder'
 import { useStarCelebration } from './composables/useStarCelebration'
 import { useTreeStore } from './stores/tree'
+import { ensureSettingsStyles, ensureTreePadStyles, ensureReleaseStyles } from './style-manager'
+import { navigateWithTurbo } from './utils/navigation'
 import TreePanel from './components/TreePanel.vue'
 import TreeHeader from './components/TreeHeader.vue'
 import SearchBar from './components/SearchBar.vue'
@@ -14,6 +16,7 @@ import FileTree from './components/FileTree.vue'
 import ToggleButton from './components/ToggleButton.vue'
 import DownloadToast from './components/DownloadToast.vue'
 import SettingsView from './components/SettingsView.vue'
+import ReleasePanel from './components/ReleasePanel.vue'
 import TreePadButton from './components/TreePadButton.vue'
 import TreePadDialog from './components/TreePadDialog.vue'
 import type { FlatNode } from '../shared/types'
@@ -28,6 +31,7 @@ useStarCelebration()
 const searchBarRef = ref<InstanceType<typeof SearchBar> | null>(null)
 const fileTreeRef = ref<InstanceType<typeof FileTree> | null>(null)
 const settingsOpen = ref(false)
+const releaseOpen = ref(false)
 const chatOpen = ref(false)
 const chatRevealSignal = ref(0)
 
@@ -75,28 +79,28 @@ function handleDownloadAll() {
 function navigateToFile(path: string) {
   const repo = store.currentRepo
   if (!repo) return
-  const url = `/${repo.owner}/${repo.repo}/blob/${repo.branch}/${path}`
-
-  const Turbo = (window as any).Turbo
-  if (Turbo?.visit) {
-    Turbo.visit(url)
-    return
-  }
-
-  const a = document.createElement('a')
-  a.href = url
-  a.dataset.turbo = 'true'
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
+  navigateWithTurbo(`/${repo.owner}/${repo.repo}/blob/${repo.branch}/${path}`)
 }
 
-function toggleSettings() {
+async function toggleSettings() {
+  if (!settingsOpen.value) {
+    await ensureSettingsStyles()
+    releaseOpen.value = false
+  }
   settingsOpen.value = !settingsOpen.value
 }
 
-function handleTreePadButtonClick() {
+async function toggleRelease() {
+  if (!releaseOpen.value) {
+    await ensureReleaseStyles()
+    settingsOpen.value = false
+  }
+  releaseOpen.value = !releaseOpen.value
+}
+
+async function handleTreePadButtonClick() {
   if (!chatOpen.value) {
+    await ensureTreePadStyles()
     chatOpen.value = true
     chatRevealSignal.value += 1
     return
@@ -120,12 +124,20 @@ const showPanel = computed(() => !!repoInfo.value)
       <TreePanel>
         <TreeHeader
           :settings-open="settingsOpen"
+          :release-open="releaseOpen"
           :can-download-all="canDownloadAll"
           @toggle-settings="toggleSettings"
+          @toggle-release="toggleRelease"
           @download-all="handleDownloadAll"
         />
         <template v-if="settingsOpen">
           <SettingsView />
+        </template>
+        <template v-else-if="releaseOpen">
+          <ReleasePanel
+            :repo-info="repoInfo"
+            @close="releaseOpen = false"
+          />
         </template>
         <template v-else>
           <SearchBar ref="searchBarRef" v-model="query" />

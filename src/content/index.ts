@@ -1,19 +1,16 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import App from './App.vue'
-import variablesCSS from './styles/variables.css?inline'
-import treeCSS from './styles/tree.css?inline'
+import { initializeStyles } from './style-manager'
 
-function mount() {
+async function mount() {
   if (document.getElementById('treepad-host')) return
 
   const host = document.createElement('div')
   host.id = 'treepad-host'
   const shadow = host.attachShadow({ mode: 'open' })
 
-  const style = document.createElement('style')
-  style.textContent = variablesCSS + '\n' + treeCSS
-  shadow.appendChild(style)
+  await initializeStyles(shadow)
 
   const appRoot = document.createElement('div')
   appRoot.id = 'treepad-app'
@@ -31,7 +28,9 @@ function mount() {
 }
 
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', mount)
+  document.addEventListener('DOMContentLoaded', () => {
+    void mount()
+  })
 } else {
-  mount()
+  void mount()
 }

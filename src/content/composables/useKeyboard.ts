@@ -35,10 +35,14 @@ export function useKeyboard(
 
     // Only handle nav keys when panel is focused, but not when typing in an input
     const panel = containerRef.value?.closest('#treepad-app')
-    if (!panel?.contains(document.activeElement) && document.activeElement !== panel) {
+    if (!panel) return
+    // TreePad runs in Shadow DOM, so activeElement is the shadow host, not the real active element
+    const root = panel.getRootNode() as ShadowRoot | Document
+    const activeEl = root instanceof ShadowRoot ? root.activeElement : root.activeElement
+    if (!panel.contains(activeEl) && activeEl !== panel) {
       return
     }
-    const tag = (document.activeElement as HTMLElement)?.tagName
+    const tag = (activeEl as HTMLElement)?.tagName
     if (tag === 'INPUT' || tag === 'TEXTAREA') {
       return
     }

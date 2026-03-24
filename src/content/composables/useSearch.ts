@@ -10,6 +10,18 @@ export interface SearchResult {
   matches?: ReadonlyArray<{ indices: readonly [number, number][] }>
 }
 
+function scoreShortQuery(node: FlatNode, query: string): number {
+  const name = node.name.toLowerCase()
+  const path = node.path.toLowerCase()
+
+  if (name === query) return 0
+  if (name.startsWith(query)) return 1
+  if (name.includes(query)) return 2
+  if (path.endsWith(query)) return 3
+  if (path.includes(query)) return 4
+  return Number.POSITIVE_INFINITY
+}
+
 export function useSearch() {
   const store = useTreeStore()
   const query = ref('')
@@ -41,13 +53,15 @@ export function useSearch() {
     if (q.length <= 2) {
       const lower = q.toLowerCase()
       results.value = store.nodes
-        .filter((n) => {
-          const name = n.name.toLowerCase()
-          const path = n.path.toLowerCase()
-          return name.includes(lower) || path.includes(lower)
-        })
+        .filter((node) => !node.isDir) // short queries: files only, directories add noise
+        .map((node) => ({
+          node,
+          score: scoreShortQuery(node, lower),
+        }))
+        .filter((entry) => Number.isFinite(entry.score))
+        .sort((a, b) => a.score - b.score || a.node.path.length - b.node.path.length)
         .slice(0, 50)
-        .map((node) => ({ node }))
+        .map(({ node }) => ({ node }))
     } else if (fuse) {
       // Fuse.js fuzzy search
       results.value = fuse

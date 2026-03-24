@@ -8,9 +8,10 @@
 #
 # 构建流程:
 #   1. TypeScript 类型检查
-#   2. Vite 构建 Content Script（IIFE 单文件，含 Vue + 样式）
-#   3. Vite 构建 Service Worker（ES Module 单文件）
-#   4. 复制 manifest.json + 图标到输出目录
+#   2. Vite 构建 Content Script（IIFE 入口）
+#   3. Vite 构建按需 runtime（Markdown / ZIP）
+#   4. Vite 构建 Service Worker（ES Module 单文件）
+#   5. 复制 manifest.json + 图标到输出目录
 #
 set -euo pipefail
 
@@ -57,8 +58,7 @@ assemble_output() {
   local target="$1"
   rm -rf "$target"
   mkdir -p "$target/icons"
-  cp "$ROOT/dist/content.js"         "$target/"
-  cp "$ROOT/dist/background.js"      "$target/"
+  cp -R "$ROOT/dist/."               "$target/"
   cp "$ROOT/public/manifest.json"    "$target/"
   cp "$ROOT/public/icons"/*          "$target/icons/"
 }
@@ -71,7 +71,12 @@ bunx vue-tsc -b
 echo "--- build content script"
 bunx vite build -c vite.config.content.ts
 
-# 3. 构建 Service Worker（ESM，追加到 dist/）
+# 3. 构建按需 runtime（追加到 dist/）
+echo "--- build lazy runtimes"
+bunx vite build -c vite.config.markdown-runtime.ts
+bunx vite build -c vite.config.zip-runtime.ts
+
+# 4. 构建 Service Worker（ESM，追加到 dist/）
 echo "--- build service worker"
 bunx vite build -c vite.config.background.ts
 

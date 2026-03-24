@@ -1,7 +1,9 @@
 import { ref, readonly } from 'vue'
-import { zipSync, type Zippable } from 'fflate'
 import type { FlatNode, RepoInfo } from '../../shared/types'
+import { base64ToBytes, toPlainArrayBuffer } from '../../shared/encoding'
 import { useI18n } from './useI18n'
+import { collectSubtreeFiles } from '../../shared/tree-utils'
+import { loadZipRuntime } from '../runtime/loaders'
 
 export interface DownloadProgress {
   folderName: string
@@ -19,28 +21,6 @@ export function useDownloadFolder() {
   const progress = ref<DownloadProgress | null>(null)
   let abortController: AbortController | null = null
 
-  function collectSubtreeFiles(
-    allNodes: FlatNode[],
-    dirNode: FlatNode,
-  ): FlatNode[] {
-    const files: FlatNode[] = []
-    for (let i = dirNode.idx + 1; i < dirNode.subtreeEnd; i++) {
-      if (!allNodes[i].isDir) {
-        files.push(allNodes[i])
-      }
-    }
-    return files
-  }
-
-  function base64ToUint8Array(base64: string): Uint8Array {
-    const binary = atob(base64)
-    const bytes = new Uint8Array(binary.length)
-    for (let i = 0; i < binary.length; i++) {
-      bytes[i] = binary.charCodeAt(i)
-    }
-    return bytes
-  }
-
   async function fetchFileViaBackground(
     owner: string,
     repo: string,
@@ -55,14 +35,7 @@ export function useDownloadFolder() {
       path,
     })
     if (res.error) throw new Error(res.error)
-    return base64ToUint8Array(res.base64)
-  }
-
-  function toArrayBuffer(data: Uint8Array): ArrayBuffer {
-    // Create a new ArrayBuffer and copy the data
-    const result = new ArrayBuffer(data.byteLength)
-    new Uint8Array(result).set(data)
-    return result
+    return base64ToBytes(res.base64)
   }
 
   function triggerDownload(data: ArrayBuffer, fileName: string, mimeType = 'application/octet-stream') {
@@ -111,7 +84,7 @@ export function useDownloadFolder() {
       errorCount: 0,
     }
 
-    const zipData: Zippable = {}
+    const zipData: Record<string, Uint8Array> = {}
     // Use parent dir as base so the folder itself is the zip root
     const lastSlash = dirNode.path.lastIndexOf('/')
     const basePath = lastSlash > 0 ? dirNode.path.slice(0, lastSlash) : ''
@@ -159,9 +132,10 @@ export function useDownloadFolder() {
 
     // Zip
     if (progress.value) progress.value.status = 'zipping'
-    const zipped = zipSync(zipData)
+    const zipRuntime = await loadZipRuntime()
+    const zipped = zipRuntime.createZipArchive(zipData)
 
-    triggerDownload(toArrayBuffer(zipped), zipName, 'application/zip')
+    triggerDownload(toPlainArrayBuffer(zipped), zipName, 'application/zip')
 
     if (progress.value) {
       progress.value.status = errors.length > 0 ? 'error' : 'done'
@@ -199,7 +173,7 @@ export function useDownloadFolder() {
       }
 
       if (progress.value) progress.value.done = 1
-      triggerDownload(toArrayBuffer(data), fileNode.name)
+      triggerDownload(toPlainArrayBuffer(data), fileNode.name)
 
       if (progress.value) progress.value.status = 'done'
     } catch {

@@ -3,8 +3,11 @@ import {
   buildRateLimitMessage,
   fetchTree,
   fetchDefaultBranch,
+  fetchMatchingBranches,
   fetchRawFile,
   fetchRateLimit,
+  fetchReleases,
+  fetchReleaseAssetAsBase64,
   getAuthMode,
   validateToken,
   type AuthInfo,
@@ -25,8 +28,7 @@ import type {
   GitHubRateLimitInfo,
 } from '../shared/types'
 import {
-  getStoredToken,
-  getStoredTokenSource,
+  readStoredGitHubCredential,
   setStoredToken,
   getStoredAiKey,
   setStoredAiKey,
@@ -45,6 +47,12 @@ const RATE_LIMIT_CACHE_TTL_MS = 15_000
 
 const inflightRequests = new Map<string, Promise<unknown>>()
 const rateLimitCache = new Map<string, { info: GitHubRateLimitInfo; fetchedAt: number }>()
+
+// ── Helpers ─────────────────────────────────────────────────
+
+function normalizeAiUrl(baseUrl: string): string {
+  return baseUrl.replace(/\/+$/, '') + '/chat/completions'
+}
 
 // ── Post-install migration ──────────────────────────────────
 
@@ -84,18 +92,18 @@ function isRateLimitFresh(auth: AuthInfo): boolean {
   const cached = rateLimitCache.get(getAuthCacheKey(auth))
   if (!cached) return false
   if (Date.now() - cached.fetchedAt < RATE_LIMIT_CACHE_TTL_MS) return true
-  return (
-    cached.info.remaining === 0 &&
-    !!cached.info.resetAt &&
-    cached.info.resetAt > Date.now()
-  )
+  return isRateLimitActive(cached.info)
+}
+
+function isRateLimitActive(info: GitHubRateLimitInfo): boolean {
+  return info.remaining === 0 && !!info.resetAt && info.resetAt > Date.now()
 }
 
 async function ensureRateLimitAvailable(auth: AuthInfo): Promise<void> {
-  if (!isRateLimitFresh(auth)) return
-
   const cached = rateLimitCache.get(getAuthCacheKey(auth))
-  if (cached && cached.info.remaining === 0 && cached.info.resetAt && cached.info.resetAt > Date.now()) {
+  if (!cached || !isRateLimitFresh(auth)) return
+
+  if (isRateLimitActive(cached.info)) {
     throw new Error(buildRateLimitMessage(cached.info.authMode, cached.info))
   }
 }
@@ -159,12 +167,9 @@ async function hasGitHubSession(): Promise<boolean> {
 // ── Auth resolution: token → browser-managed GitHub session → none ──
 
 async function resolveAuth(): Promise<AuthInfo> {
-  const token = await getStoredToken()
+  const { token, source } = await readStoredGitHubCredential()
   if (token) {
-    return {
-      token,
-      tokenSource: await getStoredTokenSource(),
-    }
+    return { token, tokenSource: source }
   }
 
   const hasSession = await hasGitHubSession()
@@ -377,7 +382,7 @@ async function handleAiChat(
   const apiKey = await getStoredAiKey()
   if (!apiKey) throw new Error('AI API key not configured')
 
-  const url = baseUrl.replace(/\/+$/, '') + '/chat/completions'
+  const url = normalizeAiUrl(baseUrl)
   const res = await fetch(url, {
     method: 'POST',
     headers: {
@@ -398,88 +403,65 @@ async function handleAiChat(
 
 // ── Message handlers ────────────────────────────────────────
 
+const messageHandlers = {
+  FETCH_TREE: (msg: { owner: string; repo: string; branch: string }) =>
+    handleFetchTree(msg.owner, msg.repo, msg.branch),
+
+  FETCH_BRANCHES: (msg: { owner: string; repo: string }) =>
+    handleFetchDefaultBranch(msg.owner, msg.repo).then((branch) => ({ branch })),
+
+  FETCH_BRANCH_MATCHES: (msg: { owner: string; repo: string; prefix: string }) =>
+    handleFetchBranchMatches(msg.owner, msg.repo, msg.prefix).then((branches) => ({ branches })),
+
+  FETCH_RAW: (msg: { owner: string; repo: string; branch: string; path: string }) =>
+    handleFetchRaw(msg.owner, msg.repo, msg.branch, msg.path).then((base64) => ({ base64 })),
+
+  FETCH_RELEASES: (msg: { owner: string; repo: string; page?: number; perPage?: number }) =>
+    handleFetchReleases(msg.owner, msg.repo, msg.page, msg.perPage).then((releases) => ({ releases })),
+
+  FETCH_RELEASE_ASSET: (msg: { url: string; fileName: string }) =>
+    handleFetchReleaseAsset(msg.url).then((base64) => ({ base64 })),
+
+  SET_TOKEN: (msg: { token: string }) =>
+    handleSetToken(msg.token).then(() => ({ ok: true })),
+
+  GET_TOKEN: () =>
+    readStoredGitHubCredential().then(({ token, source }) => ({
+      token: token ? '••••' : '',
+      source: source ?? null,
+    })),
+
+  GET_GITHUB_AUTH_STATUS: (msg: { force?: boolean }) =>
+    getGitHubAuthStatus(msg.force).then((status) => ({ status })),
+
+  SET_GITHUB_OAUTH_CLIENT_ID: (msg: { clientId: string }) =>
+    setStoredGitHubOAuthClientId(msg.clientId).then(() => ({ ok: true })),
+
+  START_GITHUB_DEVICE_FLOW: (msg: { clientId?: string }) =>
+    handleStartGitHubDeviceFlow(msg.clientId),
+
+  POLL_GITHUB_DEVICE_FLOW: (msg: { clientId?: string; deviceCode: string }) =>
+    handlePollGitHubDeviceFlow(msg.deviceCode, msg.clientId),
+
+  SET_AI_KEY: (msg: { key: string }) =>
+    handleSetAiKey(msg.key).then(() => ({ ok: true })),
+
+  GET_AI_KEY: () =>
+    getStoredAiKey().then((key) => ({ key: key ? '••••' : '' })),
+
+  AI_CHAT: (msg: { baseUrl: string; model: string; messages: any[] }) =>
+    handleAiChat(msg.baseUrl, msg.model, msg.messages).then((content) => ({ content })),
+} as const
+
+type HandlerName = keyof typeof messageHandlers
+
 chrome.runtime.onMessage.addListener((message: MessageType, _sender, sendResponse) => {
-  if (message.type === 'FETCH_TREE') {
-    handleFetchTree(message.owner, message.repo, message.branch)
-      .then(sendResponse)
-      .catch((err) => sendResponse({ error: toErrorMessage(err) }))
-    return true
-  }
-
-  if (message.type === 'FETCH_RAW') {
-    handleFetchRaw(message.owner, message.repo, message.branch, message.path)
-      .then((base64) => sendResponse({ base64 }))
-      .catch((err) => sendResponse({ error: toErrorMessage(err) }))
-    return true
-  }
-
-  if (message.type === 'FETCH_BRANCHES') {
-    handleFetchDefaultBranch(message.owner, message.repo)
-      .then((branch) => sendResponse({ branch }))
-      .catch((err) => sendResponse({ error: toErrorMessage(err) }))
-    return true
-  }
-
-  if (message.type === 'SET_TOKEN') {
-    handleSetToken(message.token)
-      .then(() => sendResponse({ ok: true }))
-      .catch((err) => sendResponse({ error: toErrorMessage(err) }))
-    return true
-  }
-
-  if (message.type === 'GET_TOKEN') {
-    Promise.all([getStoredToken(), getStoredTokenSource()])
-      .then(([token, source]) => sendResponse({
-        token: token ? '••••' : '',
-        source: source ?? null,
-      }))
-    return true
-  }
-
-  if (message.type === 'GET_GITHUB_AUTH_STATUS') {
-    getGitHubAuthStatus(message.force)
-      .then((status) => sendResponse({ status }))
-      .catch((err) => sendResponse({ error: toErrorMessage(err) }))
-    return true
-  }
-
-  if (message.type === 'SET_GITHUB_OAUTH_CLIENT_ID') {
-    setStoredGitHubOAuthClientId(message.clientId)
-      .then(() => sendResponse({ ok: true }))
-      .catch((err) => sendResponse({ error: toErrorMessage(err) }))
-    return true
-  }
-
-  if (message.type === 'START_GITHUB_DEVICE_FLOW') {
-    handleStartGitHubDeviceFlow(message.clientId)
-      .then((result) => sendResponse(result))
-      .catch((err) => sendResponse({ error: toErrorMessage(err) }))
-    return true
-  }
-
-  if (message.type === 'POLL_GITHUB_DEVICE_FLOW') {
-    handlePollGitHubDeviceFlow(message.deviceCode, message.clientId)
-      .then((result) => sendResponse(result))
-      .catch((err) => sendResponse({ error: toErrorMessage(err) }))
-    return true
-  }
-
-  if (message.type === 'SET_AI_KEY') {
-    handleSetAiKey(message.key).then(() => sendResponse({ ok: true }))
-    return true
-  }
-
-  if (message.type === 'GET_AI_KEY') {
-    getStoredAiKey().then((key) => sendResponse({ key: key ? '••••' : '' }))
-    return true
-  }
-
-  if (message.type === 'AI_CHAT') {
-    handleAiChat(message.baseUrl, message.model, message.messages)
-      .then((content) => sendResponse({ content }))
-      .catch((err) => sendResponse({ error: toErrorMessage(err) }))
-    return true
-  }
+  const handler = messageHandlers[message.type as HandlerName]
+  if (!handler) return
+  handler(message as any)
+    .then(sendResponse)
+    .catch((err) => sendResponse({ error: toErrorMessage(err) }))
+  return true
 })
 
 // ── Streaming AI chat via ports ─────────────────────────────
@@ -497,7 +479,7 @@ chrome.runtime.onConnect.addListener((port) => {
         return
       }
 
-      const url = msg.baseUrl.replace(/\/+$/, '') + '/chat/completions'
+      const url = normalizeAiUrl(msg.baseUrl)
       const res = await fetch(url, {
         method: 'POST',
         headers: {
@@ -586,6 +568,16 @@ async function handleFetchRaw(
   )
 }
 
+async function handleFetchBranchMatches(
+  owner: string,
+  repo: string,
+  prefix: string,
+): Promise<string[]> {
+  return withGitHubAuth(`matching-refs:${owner}/${repo}:${prefix}`, (auth) =>
+    fetchMatchingBranches(owner, repo, prefix, auth),
+  )
+}
+
 async function handleFetchTree(
   owner: string,
   repo: string,
@@ -603,4 +595,23 @@ async function handleFetchTree(
 
     return { nodes, truncated: response.truncated }
   })
+}
+
+async function handleFetchReleases(
+  owner: string,
+  repo: string,
+  page?: number,
+  perPage?: number,
+): Promise<import('../shared/types').GitHubRelease[]> {
+  return withGitHubAuth(`releases:${owner}/${repo}:${page ?? 1}`, (auth) =>
+    fetchReleases(owner, repo, auth, page ?? 1, perPage ?? 20),
+  )
+}
+
+async function handleFetchReleaseAsset(
+  url: string,
+): Promise<string> {
+  return withGitHubAuth(`release-asset:${url}`, (auth) =>
+    fetchReleaseAssetAsBase64(url, auth),
+  )
 }

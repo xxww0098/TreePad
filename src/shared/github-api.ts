@@ -1,4 +1,5 @@
 import { GITHUB_API_BASE } from './constants'
+import { bytesToBase64 } from './encoding'
 import type {
   GitTreeResponse,
   GitHubAuthMode,
@@ -58,8 +59,9 @@ function buildRequestInit(
   }
 }
 
-function parseHeaderNumber(value: string | null): number | null {
-  if (!value) return null
+function parseNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : null
 }
@@ -72,10 +74,10 @@ function readRateLimitInfo(
   headers: Headers,
   requestedAuthMode: GitHubAuthMode,
 ): GitHubRateLimitInfo | null {
-  const limit = parseHeaderNumber(headers.get('x-ratelimit-limit'))
-  const remaining = parseHeaderNumber(headers.get('x-ratelimit-remaining'))
-  const used = parseHeaderNumber(headers.get('x-ratelimit-used'))
-  const resetAt = toResetTimestamp(parseHeaderNumber(headers.get('x-ratelimit-reset')))
+  const limit = parseNumber(headers.get('x-ratelimit-limit'))
+  const remaining = parseNumber(headers.get('x-ratelimit-remaining'))
+  const used = parseNumber(headers.get('x-ratelimit-used'))
+  const resetAt = toResetTimestamp(parseNumber(headers.get('x-ratelimit-reset')))
   const resource = headers.get('x-ratelimit-resource')
 
   if (
@@ -157,6 +159,7 @@ async function throwApiError(
   const rateLimit = readRateLimitInfo(res.headers, authMode)
   const apiMessage = await readGitHubErrorMessage(res)
   const lowerMessage = apiMessage.toLowerCase()
+  const suffix = apiMessage ? ` — ${apiMessage}` : ''
 
   if (res.status === 401 && authMode === 'token') {
     throw new GitHubApiError(
@@ -179,7 +182,6 @@ async function throwApiError(
   }
 
   if (res.status === 403) {
-    const suffix = apiMessage ? ` — ${apiMessage}` : ''
     throw new GitHubApiError(
       `Access denied${suffix}`,
       res.status,
@@ -211,7 +213,6 @@ async function throwApiError(
     )
   }
 
-  const suffix = apiMessage ? ` — ${apiMessage}` : ''
   throw new GitHubApiError(
     `Failed to ${action}: ${res.status}${suffix}`,
     res.status,
@@ -224,10 +225,6 @@ function encodePath(path: string): string {
     .split('/')
     .map((part) => encodeURIComponent(part))
     .join('/')
-}
-
-function parseJsonNumber(value: unknown): number | null {
-  return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
 
 export async function fetchRateLimit(
@@ -246,10 +243,10 @@ export async function fetchRateLimit(
   const headerInfo = readRateLimitInfo(res.headers, requestedAuthMode)
   const data = await res.json()
   const core = data?.resources?.core ?? {}
-  const limit = parseJsonNumber(core.limit) ?? headerInfo?.limit ?? null
-  const remaining = parseJsonNumber(core.remaining) ?? headerInfo?.remaining ?? null
-  const used = parseJsonNumber(core.used) ?? headerInfo?.used ?? null
-  const resetAt = toResetTimestamp(parseJsonNumber(core.reset)) ?? headerInfo?.resetAt ?? null
+  const limit = parseNumber(core.limit) ?? headerInfo?.limit ?? null
+  const remaining = parseNumber(core.remaining) ?? headerInfo?.remaining ?? null
+  const used = parseNumber(core.used) ?? headerInfo?.used ?? null
+  const resetAt = toResetTimestamp(parseNumber(core.reset)) ?? headerInfo?.resetAt ?? null
 
   return {
     limit,
@@ -309,9 +306,7 @@ export async function fetchRawFile(
   }))
   if (!res.ok) await throwApiError(res, 'fetch file', auth)
   const buffer = await res.arrayBuffer()
-  const bytes = new Uint8Array(buffer)
-  // Use spread + apply to avoid O(n²) string concatenation
-  return btoa(String.fromCharCode(...bytes))
+  return bytesToBase64(new Uint8Array(buffer))
 }
 
 export async function fetchDefaultBranch(
@@ -326,4 +321,54 @@ export async function fetchDefaultBranch(
   if (!res.ok) await throwApiError(res, 'fetch repo', auth)
   const data = await res.json()
   return data.default_branch
+}
+
+export async function fetchMatchingBranches(
+  owner: string,
+  repo: string,
+  prefix: string,
+  auth: AuthInfo = {},
+): Promise<string[]> {
+  const res = await fetch(
+    `${GITHUB_API_BASE}/repos/${owner}/${repo}/git/matching-refs/heads/${encodePath(prefix)}`,
+    buildRequestInit(auth),
+  )
+  if (!res.ok) await throwApiError(res, 'fetch matching branches', auth)
+  const data = await res.json()
+  if (!Array.isArray(data)) return []
+
+  return data
+    .map((entry) => typeof entry?.ref === 'string'
+      ? entry.ref.replace(/^refs\/heads\//, '')
+      : '')
+    .filter(Boolean)
+}
+
+export async function fetchReleases(
+  owner: string,
+  repo: string,
+  auth: AuthInfo = {},
+  page = 1,
+  perPage = 20,
+): Promise<import('./types').GitHubRelease[]> {
+  const res = await fetch(
+    `${GITHUB_API_BASE}/repos/${owner}/${repo}/releases?per_page=${perPage}&page=${page}`,
+    buildRequestInit(auth),
+  )
+  if (!res.ok) await throwApiError(res, 'fetch releases', auth)
+  return res.json()
+}
+
+export async function fetchReleaseAssetAsBase64(
+  url: string,
+  auth: AuthInfo = {},
+): Promise<string> {
+  const res = await fetch(url, buildRequestInit(auth, {
+    headers: {
+      Accept: 'application/octet-stream',
+    },
+  }))
+  if (!res.ok) await throwApiError(res, 'download release asset', auth)
+  const buffer = await res.arrayBuffer()
+  return bytesToBase64(new Uint8Array(buffer))
 }

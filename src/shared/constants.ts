@@ -9,6 +9,8 @@ export const GITHUB_API_BASE = 'https://api.github.com'
 
 export const CACHE_PREFIX = 'treepad:'
 export const CACHE_MAX_AGE = 1000 * 60 * 60 * 24 // 24 hours
+export const TREE_CACHE_MAX_ENTRIES = 24
+export const DEFAULT_BRANCH_CACHE_MAX_ENTRIES = 64
 
 export const SEARCH_DEBOUNCE_MS = 150
 export const SEARCH_FUSE_THRESHOLD = 0.4

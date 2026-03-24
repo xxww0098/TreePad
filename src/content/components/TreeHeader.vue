@@ -1,18 +1,21 @@
 <script setup lang="ts">
-import { onUnmounted, ref } from 'vue'
+import { computed, onUnmounted, ref } from 'vue'
 import { useTreeStore } from '../stores/tree'
 import { useSettingsStore } from '../stores/settings'
 import { useI18n } from '../composables/useI18n'
+import { navigateWithTurbo } from '../utils/navigation'
 
 const { t } = useI18n()
 
 const props = defineProps<{
   settingsOpen: boolean
+  releaseOpen: boolean
   canDownloadAll: boolean
 }>()
 
 const emit = defineEmits<{
   'toggle-settings': []
+  'toggle-release': []
   'download-all': []
 }>()
 
@@ -20,23 +23,15 @@ const tree = useTreeStore()
 const settings = useSettingsStore()
 const collapseActive = ref(false)
 
+// True when any folder is expanded
+const hasExpandedFolders = computed(() => tree.expandedIds.size > 0)
+
 let collapseTimer: number | null = null
 
 function navigateToRepo() {
   const repo = tree.currentRepo
   if (!repo) return
-  const url = `/${repo.owner}/${repo.repo}`
-  const Turbo = (window as any).Turbo
-  if (Turbo?.visit) {
-    Turbo.visit(url)
-    return
-  }
-  const a = document.createElement('a')
-  a.href = url
-  a.dataset.turbo = 'true'
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
+  navigateWithTurbo(`/${repo.owner}/${repo.repo}`)
 }
 
 function clearCollapseTimer() {
@@ -80,13 +75,23 @@ onUnmounted(() => {
         :aria-label="t('header.collapse')"
         @click="handleCollapseAll"
       >
-        <svg class="collapse-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-          <path class="collapse-icon-rail" d="M4 3.5v9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-          <path class="collapse-icon-branch collapse-icon-branch-top" d="M4 4.25h6.25" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-          <path class="collapse-icon-branch collapse-icon-branch-mid" d="M4 8h4.1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-          <path class="collapse-icon-branch collapse-icon-branch-bottom" d="M4 11.75h5.1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-          <path class="collapse-icon-arrow-line" d="M12.4 8H8.7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-          <path class="collapse-icon-arrow-head" d="M10.35 6.35 8.35 8l2 1.65" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+        <svg
+          class="collapse-icon"
+          :class="{ 'chevron-down': hasExpandedFolders, 'chevron-left': !hasExpandedFolders }"
+          width="14"
+          height="14"
+          viewBox="0 0 16 16"
+          fill="none"
+          aria-hidden="true"
+        >
+          <path
+            class="collapse-chevron-path"
+            d="M12.5 5 8 9.5 3.5 5"
+            stroke="currentColor"
+            stroke-width="1.75"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
         </svg>
       </button>
       <button
@@ -100,6 +105,18 @@ onUnmounted(() => {
         <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
           <path d="M2.75 13.5A1.25 1.25 0 0 1 1.5 12.25V10a.75.75 0 0 1 1.5 0v2.25h10V10a.75.75 0 0 1 1.5 0v2.25a1.25 1.25 0 0 1-1.25 1.25Z" />
           <path d="M7.25 2a.75.75 0 0 1 1.5 0v6.19l1.72-1.72a.75.75 0 0 1 1.06 1.06L8.53 10.56a.75.75 0 0 1-1.06 0L4.47 7.53a.75.75 0 1 1 1.06-1.06l1.72 1.72Z" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        class="tree-header-btn"
+        :class="{ 'release-active': releaseOpen }"
+        :title="t('header.releases')"
+        :aria-label="t('header.releases')"
+        @click="emit('toggle-release')"
+      >
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+          <path d="M1 7.775V2.75C1 1.784 1.784 1 2.75 1h5.025c.464 0 .91.184 1.238.513l6.25 6.25a1.75 1.75 0 010 2.474l-5.026 5.026a1.75 1.75 0 01-2.474 0l-6.25-6.25A1.752 1.752 0 011 7.775zm1.5 0c0 .066.026.13.073.177l6.25 6.25a.25.25 0 00.354 0l5.025-5.025a.25.25 0 000-.354l-6.25-6.25a.25.25 0 00-.177-.073H2.75a.25.25 0 00-.25.25zM6 5a1 1 0 110 2 1 1 0 010-2z" />
         </svg>
       </button>
       <button

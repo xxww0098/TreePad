@@ -1,4 +1,5 @@
 import type { GitHubTokenSource } from '../shared/types'
+import { base64ToBytes, bytesToBase64, toPlainArrayBuffer } from '../shared/encoding'
 
 // ── Storage keys ────────────────────────────────────────────
 
@@ -41,6 +42,8 @@ const SECRET_SCOPE_SUFFIX: Record<SecureCredentialSlot, string> = {
   aiKey: 'ai-key',
 }
 
+const AES_GCM_IV_LENGTH = 12 // bytes (96 bits)
+
 // ── Helpers ─────────────────────────────────────────────────
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -49,27 +52,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function emptyCredentialStore(): SecureCredentialStore {
   return { version: 1 }
-}
-
-function bytesToBase64(bytes: Uint8Array): string {
-  let binary = ''
-  for (const byte of bytes) {
-    binary += String.fromCharCode(byte)
-  }
-  return btoa(binary)
-}
-
-function base64ToBytes(base64: string): Uint8Array {
-  const decoded = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))
-  const buffer = new ArrayBuffer(decoded.byteLength)
-  new Uint8Array(buffer).set(decoded)
-  return new Uint8Array(buffer)
-}
-
-function toPlainArrayBuffer(bytes: Uint8Array): ArrayBuffer {
-  const buffer = new ArrayBuffer(bytes.byteLength)
-  new Uint8Array(buffer).set(bytes)
-  return buffer
 }
 
 // ── Envelope validation ─────────────────────────────────────
@@ -132,7 +114,7 @@ async function getCredentialKeyMaterial(): Promise<string> {
       if (typeof existing === 'string' && existing.trim()) return existing.trim()
 
       const bytes = crypto.getRandomValues(new Uint8Array(32))
-      const generated = btoa(String.fromCharCode(...bytes))
+      const generated = bytesToBase64(bytes)
       await chrome.storage.local.set({ [CREDENTIAL_KEY_MATERIAL_KEY]: generated })
       return generated
     })()
@@ -188,8 +170,8 @@ async function decryptSecretEnvelope(envelope: StoredSecretEnvelopeV2): Promise<
 
 async function decryptLegacySecretWithKey(stored: string, key: CryptoKey): Promise<string> {
   const buf = base64ToBytes(stored)
-  const iv = toPlainArrayBuffer(buf.slice(0, 12))
-  const data = toPlainArrayBuffer(buf.slice(12))
+  const iv = toPlainArrayBuffer(buf.slice(0, AES_GCM_IV_LENGTH))
+  const data = toPlainArrayBuffer(buf.slice(AES_GCM_IV_LENGTH))
   const dec = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, data)
   return new TextDecoder().decode(dec)
 }
@@ -203,6 +185,7 @@ async function decryptLegacySecret(
       scheme: 'install-key-v1',
     }
   } catch {
+    // Fall back to runtime-derived key; error propagates if this also fails
     return {
       value: await decryptLegacySecretWithKey(stored, await getLegacyRuntimeDerivedKey()),
       scheme: 'runtime-id-v1',
@@ -271,16 +254,6 @@ export async function readStoredGitHubCredential(): Promise<{
     console.warn('[TreePad] Failed to decrypt GitHub token')
     return { token: undefined, source: undefined }
   }
-}
-
-export async function getStoredToken(): Promise<string | undefined> {
-  const { token } = await readStoredGitHubCredential()
-  return token
-}
-
-export async function getStoredTokenSource(): Promise<GitHubTokenSource | undefined> {
-  const { source } = await readStoredGitHubCredential()
-  return source
 }
 
 export async function setStoredToken(

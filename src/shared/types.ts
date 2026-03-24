@@ -33,6 +33,27 @@ export interface RepoInfo {
   type?: 'tree' | 'blob'
   branch: string
   path: string
+  rawRef?: string
+}
+
+/** GitHub release asset */
+export interface GitHubReleaseAsset {
+  id: number
+  name: string
+  size: number
+  browser_download_url: string
+  content_type: string
+}
+
+/** GitHub release */
+export interface GitHubRelease {
+  id: number
+  tag_name: string
+  name: string | null
+  prerelease: boolean
+  draft: boolean
+  published_at: string | null
+  readonly assets: GitHubReleaseAsset[]
 }
 
 export type GitHubAuthMode = 'none' | 'token' | 'cookie'
@@ -75,7 +96,10 @@ export interface GitHubDeviceFlowPollResult {
 export type MessageType =
   | { type: 'FETCH_TREE'; owner: string; repo: string; branch: string }
   | { type: 'FETCH_BRANCHES'; owner: string; repo: string }
+  | { type: 'FETCH_BRANCH_MATCHES'; owner: string; repo: string; prefix: string }
   | { type: 'FETCH_RAW'; owner: string; repo: string; branch: string; path: string }
+  | { type: 'FETCH_RELEASES'; owner: string; repo: string; page?: number; perPage?: number }
+  | { type: 'FETCH_RELEASE_ASSET'; url: string; fileName: string }
   | { type: 'SET_TOKEN'; token: string }
   | { type: 'GET_TOKEN' }
   | { type: 'GET_GITHUB_AUTH_STATUS'; force?: boolean }

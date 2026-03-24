@@ -1,0 +1,601 @@
+/* ═══════════════════════════════════════════════
+   Release Panel
+   ═══════════════════════════════════════════════ */
+
+.release-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+  font-family: var(--rt-font);
+}
+
+/* ── Header ──────────────────────────────────── */
+
+.rp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px 10px;
+  flex-shrink: 0;
+}
+
+.rp-header-left {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.rp-tag-icon {
+  color: var(--rt-accent);
+  flex-shrink: 0;
+}
+
+.rp-title {
+  font-weight: 650;
+  font-size: 12.5px;
+  letter-spacing: -0.01em;
+  color: var(--rt-text);
+}
+
+.rp-close-btn {
+  background: none;
+  border: none;
+  color: var(--rt-text-tertiary);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.rp-close-btn:hover {
+  background: var(--rt-bg-hover);
+  color: var(--rt-text);
+}
+
+/* ── States (loading/error/empty) ────────────── */
+
+.rp-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 16px;
+  gap: 10px;
+  color: var(--rt-text-tertiary);
+  font-size: 12px;
+  flex: 1;
+}
+
+.rp-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--rt-panel-border);
+  border-top-color: var(--rt-accent);
+  border-radius: 50%;
+  animation: rp-spin 0.7s linear infinite;
+}
+
+.rp-spinner-sm {
+  width: 14px;
+  height: 14px;
+  border-width: 1.5px;
+}
+
+@keyframes rp-spin {
+  to { transform: rotate(360deg); }
+}
+
+.rp-state-text {
+  font-size: 12px;
+  color: var(--rt-text-tertiary);
+}
+
+.rp-error-text {
+  font-size: 12px;
+  color: #ef4444;
+  text-align: center;
+  line-height: 1.4;
+}
+
+.rp-empty-icon {
+  color: var(--rt-text-tertiary);
+  opacity: 0.5;
+}
+
+.rp-action-btn {
+  background: var(--rt-bg-hover);
+  border: 1px solid var(--rt-panel-border);
+  border-radius: 8px;
+  color: var(--rt-accent);
+  cursor: pointer;
+  font-size: 11.5px;
+  font-family: var(--rt-font);
+  padding: 5px 14px;
+  transition: background 0.15s ease;
+}
+
+.rp-action-btn:hover {
+  background: color-mix(in srgb, var(--rt-accent) 12%, var(--rt-bg));
+}
+
+/* ── Version selector row ────────────────────── */
+
+.rp-version-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 14px 8px;
+  flex-shrink: 0;
+}
+
+.rp-version-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--rt-search-bg) 94%, white 6%) 0%, color-mix(in srgb, var(--rt-header-bg) 100%, transparent) 100%);
+  border: 1px solid color-mix(in srgb, var(--rt-panel-border) 78%, var(--rt-search-border));
+  border-radius: 8px;
+  padding: 5px 10px;
+  cursor: pointer;
+  color: var(--rt-text);
+  font-size: 12px;
+  font-family: var(--rt-font-mono);
+  font-weight: 600;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 4px 10px rgba(15, 23, 42, 0.04);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.rp-version-btn:hover {
+  border-color: color-mix(in srgb, var(--rt-accent) 28%, var(--rt-search-border));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 6px 14px rgba(37, 99, 235, 0.06);
+}
+
+.rp-version-label {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rp-pre-badge {
+  font-size: 9px;
+  font-weight: 700;
+  font-family: var(--rt-font);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: rgba(245, 158, 11, 0.14);
+  color: #f59e0b;
+  padding: 1px 6px;
+  border-radius: 999px;
+  line-height: 1.4;
+}
+
+.rp-pre-badge-sm {
+  font-size: 8px;
+  padding: 1px 4px;
+}
+
+.rp-chevron {
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  color: var(--rt-text-tertiary);
+  flex-shrink: 0;
+}
+
+.rp-chevron.open {
+  transform: rotate(180deg);
+}
+
+.rp-date {
+  font-size: 11px;
+  color: var(--rt-text-tertiary);
+  white-space: nowrap;
+}
+
+/* ── Version dropdown ────────────────────────── */
+
+.rp-version-dropdown {
+  margin: 0 10px 6px;
+  border: 1px solid var(--rt-panel-border);
+  border-radius: 10px;
+  background: var(--rt-search-bg);
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 4px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
+}
+
+.rp-version-dropdown::-webkit-scrollbar {
+  width: 4px;
+}
+
+.rp-version-dropdown::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.rp-version-dropdown::-webkit-scrollbar-thumb {
+  background: var(--rt-scrollbar);
+  border-radius: 9px;
+}
+
+.rp-version-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  background: none;
+  border: none;
+  border-radius: 7px;
+  padding: 7px 10px;
+  cursor: pointer;
+  font-family: var(--rt-font);
+  font-size: 12px;
+  color: var(--rt-text);
+  text-align: left;
+  transition: background 0.12s ease;
+}
+
+.rp-version-option:hover {
+  background: var(--rt-bg-hover);
+}
+
+.rp-version-option.active {
+  background: var(--rt-bg-selected);
+  font-weight: 600;
+}
+
+.rp-version-option.active::before {
+  content: '';
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--rt-accent);
+  flex-shrink: 0;
+}
+
+.rp-vo-tag {
+  font-family: var(--rt-font-mono);
+  font-weight: 600;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.rp-vo-date {
+  font-size: 10.5px;
+  color: var(--rt-text-tertiary);
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.rp-load-more-option {
+  justify-content: center;
+  color: var(--rt-accent);
+  font-weight: 500;
+}
+
+/* ── Assets section ──────────────────────────── */
+
+.rp-assets-section {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 6px 8px;
+}
+
+.rp-assets-section::-webkit-scrollbar {
+  width: 4px;
+}
+
+.rp-assets-section::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.rp-assets-section::-webkit-scrollbar-thumb {
+  background: var(--rt-scrollbar);
+  border-radius: 9px;
+}
+
+.rp-section-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 8px 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--rt-text-tertiary);
+}
+
+.rp-section-label-muted {
+  opacity: 0.7;
+  padding-top: 10px;
+}
+
+.rp-platform-chip {
+  font-size: 9px;
+  font-weight: 700;
+  background: color-mix(in srgb, var(--rt-accent) 12%, transparent);
+  color: var(--rt-accent);
+  padding: 2px 7px;
+  border-radius: 999px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* ── Asset list ──────────────────────────────── */
+
+.rp-asset-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rp-asset {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 8px;
+  border-radius: 9px;
+  transition: background 0.12s ease;
+  gap: 6px;
+}
+
+.rp-asset:hover {
+  background: var(--rt-bg-hover);
+}
+
+.rp-asset-muted {
+  opacity: 0.6;
+}
+
+.rp-asset-muted:hover {
+  opacity: 0.85;
+}
+
+.rp-asset-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.rp-asset-emoji {
+  font-size: 14px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.rp-asset-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.rp-asset-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--rt-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.3;
+}
+
+.rp-asset-size {
+  font-size: 10.5px;
+  color: var(--rt-text-tertiary);
+  font-family: var(--rt-font-mono);
+  line-height: 1.2;
+}
+
+/* ── Download button ─────────────────────────── */
+
+.rp-dl-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--rt-accent) 8%, var(--rt-search-bg)) 0%, color-mix(in srgb, var(--rt-accent) 4%, var(--rt-bg)) 100%);
+  border: 1px solid color-mix(in srgb, var(--rt-accent) 18%, var(--rt-panel-border));
+  border-radius: 8px;
+  color: var(--rt-accent);
+  cursor: pointer;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.20),
+    0 4px 8px rgba(37, 99, 235, 0.06);
+  transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.rp-dl-btn:hover {
+  background: color-mix(in srgb, var(--rt-accent) 14%, var(--rt-search-bg));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.20),
+    0 6px 14px rgba(37, 99, 235, 0.10);
+  transform: scale(1.05);
+}
+
+.rp-dl-btn:active {
+  transform: scale(0.95);
+}
+
+.rp-dl-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  transform: none;
+}
+
+.rp-dl-btn-muted {
+  background: none;
+  border-color: var(--rt-panel-border);
+  color: var(--rt-text-tertiary);
+  box-shadow: none;
+}
+
+.rp-dl-btn-muted:hover {
+  color: var(--rt-accent);
+  border-color: color-mix(in srgb, var(--rt-accent) 22%, var(--rt-panel-border));
+}
+
+.rp-dl-spinner {
+  animation: rp-spin 0.8s linear infinite;
+}
+
+/* ── Toggle platforms button ─────────────────── */
+
+.rp-toggle-platforms {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: calc(100% - 12px);
+  margin: 6px 6px 4px;
+  padding: 7px;
+  background: none;
+  border: 1px dashed color-mix(in srgb, var(--rt-accent) 24%, var(--rt-panel-border));
+  border-radius: 8px;
+  color: var(--rt-accent);
+  cursor: pointer;
+  font-size: 11.5px;
+  font-family: var(--rt-font);
+  font-weight: 500;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.rp-toggle-platforms:hover {
+  background: color-mix(in srgb, var(--rt-accent) 6%, transparent);
+  border-color: color-mix(in srgb, var(--rt-accent) 36%, var(--rt-panel-border));
+}
+
+.rp-other-count {
+  font-size: 10px;
+  font-weight: 700;
+  background: color-mix(in srgb, var(--rt-accent) 12%, transparent);
+  padding: 1px 5px;
+  border-radius: 999px;
+}
+
+.rp-toggle-back {
+  background: none;
+  border: none;
+  color: var(--rt-accent);
+  cursor: pointer;
+  font-size: 10.5px;
+  font-family: var(--rt-font);
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: background 0.12s ease;
+}
+
+.rp-toggle-back:hover {
+  background: color-mix(in srgb, var(--rt-accent) 8%, transparent);
+}
+
+/* ── No assets ───────────────────────────────── */
+
+.rp-no-assets {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  font-size: 12px;
+  color: var(--rt-text-tertiary);
+}
+
+/* ── Download toast ──────────────────────────── */
+
+.rp-toast {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  right: 8px;
+  background: var(--rt-toggle-bg);
+  backdrop-filter: blur(8px) saturate(170%);
+  -webkit-backdrop-filter: blur(8px) saturate(170%);
+  border: 1px solid var(--rt-panel-border);
+  border-radius: 10px;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 10;
+  box-shadow: var(--rt-toggle-shadow);
+}
+
+.rp-toast-enter-active {
+  animation: rp-toast-in 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.rp-toast-leave-active {
+  animation: rp-toast-out 0.2s ease forwards;
+}
+
+@keyframes rp-toast-in {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes rp-toast-out {
+  to {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+.rp-toast-name {
+  font-weight: 600;
+  font-size: 11.5px;
+  color: var(--rt-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 120px;
+}
+
+.rp-toast-status {
+  font-size: 11px;
+  color: var(--rt-text-secondary);
+  flex: 1;
+  text-align: right;
+}
+
+.rp-toast-done .rp-toast-status {
+  color: #22c55e;
+}
+
+.rp-toast-error .rp-toast-status {
+  color: #ef4444;
+}
+
+/* ── Header Release button active state ──────── */
+
+.tree-header-btn.release-active {
+  color: var(--rt-accent);
+  background: color-mix(in srgb, var(--rt-accent) 10%, var(--rt-search-bg));
+  border-color: color-mix(in srgb, var(--rt-accent) 22%, var(--rt-search-border));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 10px 20px rgba(37, 99, 235, 0.10);
+}

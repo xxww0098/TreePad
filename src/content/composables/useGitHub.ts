@@ -1,6 +1,23 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import type { RepoInfo } from '../../shared/types'
 
+export function resolveMatchedGitHubRef(
+  rawRef: string,
+  branches: string[],
+): Pick<RepoInfo, 'branch' | 'path'> | null {
+  const branch = [...new Set(branches)]
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length)
+    .find((candidate) => rawRef === candidate || rawRef.startsWith(`${candidate}/`))
+
+  if (!branch) return null
+
+  return {
+    branch,
+    path: rawRef === branch ? '' : rawRef.slice(branch.length + 1),
+  }
+}
+
 export function parseGitHubURL(url: string): RepoInfo | null {
   const match = url.match(
     /github\.com\/([^/?#]+)\/([^/?#]+)(?:\/(tree|blob)\/([^?#]+?))?(?:[?#]|$)/,
@@ -33,6 +50,7 @@ export function parseGitHubURL(url: string): RepoInfo | null {
     type: match[3] as 'tree' | 'blob',
     branch,
     path,
+    rawRef: rest,
   }
 }
 

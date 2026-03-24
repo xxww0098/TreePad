@@ -1,33 +1,59 @@
-import { computed, watch } from 'vue'
+import { watch } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useTreeStore } from '../stores/tree'
-import type { FlatNode, RepoInfo } from '../../shared/types'
-import { useGitHub } from './useGitHub'
-
-export function computeVisibleNodes(
-  nodes: FlatNode[],
-  expandedIds: Set<number>,
-): FlatNode[] {
-  const result: FlatNode[] = []
-  let i = 0
-  while (i < nodes.length) {
-    const node = nodes[i]
-    result.push(node)
-    if (node.isDir && !expandedIds.has(node.idx)) {
-      i = node.subtreeEnd // O(1) skip collapsed subtree
-    } else {
-      i++
-    }
-  }
-  return result
-}
+import type { RepoInfo } from '../../shared/types'
+import { resolveMatchedGitHubRef, useGitHub } from './useGitHub'
 
 export function useTree() {
   const store = useTreeStore()
   const { repoInfo } = useGitHub()
+  const { visibleNodes } = storeToRefs(store)
 
-  const visibleNodes = computed(() =>
-    computeVisibleNodes(store.nodes, store.expandedIds),
-  )
+  function getPathForKnownBranch(info: RepoInfo, branch: string | undefined): string | null {
+    if (!info.type || !info.rawRef || !branch) return null
+    if (info.rawRef === branch) return ''
+    if (info.rawRef.startsWith(`${branch}/`)) {
+      return info.rawRef.slice(branch.length + 1)
+    }
+    return null
+  }
+
+  async function resolveRepoInfo(info: RepoInfo): Promise<RepoInfo> {
+    let branch = info.branch
+    let path = info.path
+
+    if (!branch) {
+      const res = await chrome.runtime.sendMessage({
+        type: 'FETCH_BRANCHES',
+        owner: info.owner,
+        repo: info.repo,
+      })
+      if (res.error) throw new Error(res.error)
+      branch = res.branch
+    } else if (info.type && info.rawRef?.includes('/')) {
+      const res = await chrome.runtime.sendMessage({
+        type: 'FETCH_BRANCH_MATCHES',
+        owner: info.owner,
+        repo: info.repo,
+        prefix: branch,
+      })
+      if (res.error) throw new Error(res.error)
+      const matched = resolveMatchedGitHubRef(
+        info.rawRef,
+        Array.isArray(res.branches) ? res.branches : [],
+      )
+      if (matched) {
+        branch = matched.branch
+        path = matched.path
+      }
+    }
+
+    return {
+      ...info,
+      branch,
+      path,
+    }
+  }
 
   async function fetchTree(info: RepoInfo) {
     if (!info.owner || !info.repo) return
@@ -41,34 +67,24 @@ export function useTree() {
     }
 
     try {
-      let branch = info.branch
-      if (!branch) {
-        // Fetch default branch
-        const res = await chrome.runtime.sendMessage({
-          type: 'FETCH_BRANCHES',
-          owner: info.owner,
-          repo: info.repo,
-        })
-        if (res.error) throw new Error(res.error)
-        branch = res.branch
-      }
+      const resolvedInfo = await resolveRepoInfo(info)
 
       const response = await chrome.runtime.sendMessage({
         type: 'FETCH_TREE',
-        owner: info.owner,
-        repo: info.repo,
-        branch,
+        owner: resolvedInfo.owner,
+        repo: resolvedInfo.repo,
+        branch: resolvedInfo.branch,
       })
 
       if (response.error) {
         throw new Error(response.error)
       }
 
-      await store.setNodes(response.nodes, { ...info, branch })
+      await store.setNodes(response.nodes, resolvedInfo)
 
       // If URL has a path, select it
-      if (info.path) {
-        store.selectPath(info.path)
+      if (resolvedInfo.path) {
+        store.selectPath(resolvedInfo.path)
       }
     } catch (err) {
       store.error = err instanceof Error ? err.message : 'Failed to load tree'
@@ -87,14 +103,21 @@ export function useTree() {
       const repoChanged =
         !oldInfo ||
         newInfo.owner !== oldInfo.owner ||
-        newInfo.repo !== oldInfo.repo ||
-        (newInfo.branch && newInfo.branch !== oldInfo.branch)
+        newInfo.repo !== oldInfo.repo
 
-      if (repoChanged) {
+      const knownBranch = store.currentRepo?.branch
+      const branchPath = getPathForKnownBranch(newInfo, knownBranch)
+      const branchChanged =
+        !repoChanged &&
+        branchPath === null &&
+        !!newInfo.branch &&
+        newInfo.branch !== (knownBranch || oldInfo?.branch)
+
+      if (repoChanged || branchChanged) {
         fetchTree(newInfo)
-      } else if (newInfo.path !== oldInfo?.path) {
+      } else {
         // Just update selected path
-        store.selectPath(newInfo.path)
+        store.selectPath(branchPath ?? newInfo.path)
       }
     },
     { immediate: true },

@@ -1,4 +1,4 @@
-import { onMounted, onUnmounted } from 'vue'
+import { onUnmounted, watch } from 'vue'
 import { useSettingsStore } from '../stores/settings'
 
 interface Particle {
@@ -72,8 +72,22 @@ function drawStar(ctx: CanvasRenderingContext2D, x: number, y: number, size: num
   ctx.restore()
 }
 
-function runAnimation(canvas: HTMLCanvasElement, cx: number, cy: number) {
+export function configureCelebrationCanvas(
+  canvas: HTMLCanvasElement,
+  dpr: number,
+  viewportWidth = window.innerWidth,
+  viewportHeight = window.innerHeight,
+): CanvasRenderingContext2D {
+  canvas.width = viewportWidth * dpr
+  canvas.height = viewportHeight * dpr
+  canvas.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;pointer-events:none;z-index:999999'
+
   const ctx = canvas.getContext('2d')!
+  ctx.scale(dpr, dpr)
+  return ctx
+}
+
+function runAnimation(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, cx: number, cy: number) {
   const particles = createParticles(cx, cy)
   const start = performance.now()
 
@@ -129,12 +143,11 @@ function celebrate(button: HTMLElement) {
   const cy = rect.top + rect.height / 2
 
   const canvas = document.createElement('canvas')
-  canvas.width = window.innerWidth
-  canvas.height = window.innerHeight
-  canvas.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;pointer-events:none;z-index:999999'
+  const dpr = window.devicePixelRatio || 1
+  const ctx = configureCelebrationCanvas(canvas, dpr)
   document.body.appendChild(canvas)
 
-  runAnimation(canvas, cx, cy)
+  runAnimation(ctx, canvas, cx, cy)
 }
 
 export function useStarCelebration() {
@@ -154,14 +167,20 @@ export function useStarCelebration() {
 
     // Find the button for positioning
     const btn = target.closest('button') || form.querySelector('button')
-    if (btn) {
-      if (settings.celebrateStar) celebrate(btn)
-    }
+    if (btn) celebrate(btn)
   }
 
-  onMounted(() => {
-    document.addEventListener('click', handleClick, true)
-  })
+  watch(
+    () => settings.celebrateStar,
+    (enabled) => {
+      if (enabled) {
+        document.addEventListener('click', handleClick, true)
+        return
+      }
+      document.removeEventListener('click', handleClick, true)
+    },
+    { immediate: true },
+  )
 
   onUnmounted(() => {
     document.removeEventListener('click', handleClick, true)

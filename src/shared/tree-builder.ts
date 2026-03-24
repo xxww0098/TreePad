@@ -26,17 +26,19 @@ export function buildFlatNodes(entries: GitTreeEntry[]): FlatNode[] {
   for (const entry of entries) {
     const parts = entry.path.split('/')
     let current = root
+    let currentPath = ''
 
     for (let i = 0; i < parts.length; i++) {
       const part = parts[i]
       const isLast = i === parts.length - 1
+      currentPath = currentPath ? `${currentPath}/${part}` : part
 
       if (isLast && entry.type === 'blob') {
         current.children.set(part, { name: part, path: entry.path })
       } else {
         let child = current.children.get(part)
         if (!child || !isDir(child)) {
-          child = { name: part, path: parts.slice(0, i + 1).join('/'), children: new Map() }
+          child = { name: part, path: currentPath, children: new Map() }
           current.children.set(part, child)
         }
         current = child
@@ -74,7 +76,7 @@ export function buildFlatNodes(entries: GitTreeEntry[]): FlatNode[] {
         dfs(child, depth + 1, idx)
 
         node.subtreeEnd = result.length
-        node.childCount = [...child.children.values()].length
+        node.childCount = child.children.size
       } else {
         result.push({
           idx,
