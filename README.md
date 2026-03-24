@@ -134,3 +134,40 @@ Detailed guide: [docs/GITHUB_OAUTH.md](./docs/GITHUB_OAUTH.md)
 | `https://api.github.com/*` | Fetch repo tree and branches |
 | `https://raw.githubusercontent.com/*` | Fetch raw file content |
 | `https://*/*` | Call user-configured AI API endpoints |
+
+---
+
+## Changelog
+
+### v0.4.0 (2025-03-24)
+
+#### ✨ New Features
+- **History Panel** — View and manage conversation history
+- **Mention Panel** — @mentions functionality
+- **Release Panel** — Display release information
+- **Message List** — Message list component with unit tests
+- **Action Dock** — Quick action dock bar
+- **Composer** — Message input component
+- **Quick Actions** — Quick action buttons
+
+#### 🆕 New Composables
+- `useChatSession` — Chat session management
+- `useConversationHistory` — Conversation history management
+- `useDialogGeometry` — Dialog geometry state management
+- `useReleases` — Fetch release information
+- `useStarCelebration` — Star celebration animation effects
+
+#### 🌍 Internationalization
+- Added i18n support with English and Chinese locales
+- Language switch setting
+
+#### 🧪 Testing
+- Added 14 test files with 59 test cases
+- Component tests: MessageList, ReleasePanel
+- Composable tests: useChatSession, useGitHub, useReleases, useStarCelebration
+- Store tests: settings, tree
+
+#### 🔧 Technical Improvements
+- Added Markdown runtime and ZIP runtime
+- Refactored style architecture with modular CSS
+- Added utility functions and shared modules
