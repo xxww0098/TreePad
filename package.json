@@ -1,7 +1,7 @@
 {
   "name": "treepad",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.4.0",
   "type": "module",
   "scripts": {
     "build": "vue-tsc -b && vite build -c vite.config.content.ts && vite build -c vite.config.markdown-runtime.ts && vite build -c vite.config.zip-runtime.ts && vite build -c vite.config.background.ts",
